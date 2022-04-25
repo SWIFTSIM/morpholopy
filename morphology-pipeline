@@ -1,0 +1,256 @@
+#!/usr/bin/env python3
+"""
+morphology-pipeline is used to generate complex morphological plots for one or
+multiple COLIBRE simulation runs. These plot require a relatively expensive
+analysis of galaxies in the simulation on an individual galaxy basis and are
+therefore more challenging to generate than the plots in the conventional
+pipeline.
+
+ADD MORE DESCRIPTION HERE
+"""
+
+import argparse as ap
+import multiprocessing as mp
+
+parser = ap.ArgumentParser(
+    prog="morphology-pipeline",
+    description=("TO PROVIDE"),
+    epilog=("Example usage: TO PROVIDE\n"),
+)
+
+# no configuration?
+"""
+parser.add_argument(
+    "-C",
+    "--config",
+    type=str,
+    required=True,
+    help=("Configuration directory, containing config.yml."),
+)
+"""
+
+parser.add_argument(
+    "-c",
+    "--catalogues",
+    type=str,
+    required=True,
+    help="Name of the VELOCIraptor HDF5 .properties file(s). Required.",
+    nargs="*",
+)
+
+parser.add_argument(
+    "-s",
+    "--snapshots",
+    required=True,
+    type=str,
+    help="Name of the snapshot file(s). Required.",
+    nargs="*",
+)
+
+parser.add_argument(
+    "-o",
+    "--output",
+    type=str,
+    required=True,
+    help="Output directory for figures. Required.",
+)
+
+parser.add_argument(
+    "-i",
+    "--input",
+    type=str,
+    required=False,
+    default=".",
+    help=(
+        "Input directory where the snapshot(s) and properties file(s) are located. "
+        "Default is the current working directory. If you are running for comparison "
+        "purposes you will need to ensure that the metadata yaml files have been "
+        "generated in these folders and have the same basename (--metadata) as is "
+        "given here."
+    ),
+    nargs="*",
+)
+
+# debug mode?
+"""
+parser.add_argument(
+    "-d",
+    "--debug",
+    required=False,
+    default=False,
+    action="store_true",
+    help="Run in debug mode if this flag is present. Default: no.",
+)
+"""
+
+
+parser.add_argument(
+    "-m",
+    "--metadata",
+    required=False,
+    default="data",
+    help=(
+        "Base name of the written metadata file in the input directory. "
+        "By default this is data, leading to data_XXXX.yml"
+    ),
+)
+
+parser.add_argument(
+    "-n",
+    "--run-names",
+    required=False,
+    default=None,
+    nargs="*",
+    help=(
+        "Overwrite the names given to each run? If not present, the default names "
+        "from the snapshots are used, and in the case where there are multiple "
+        "redshifts, we append the redshift."
+    ),
+)
+
+parser.add_argument(
+    "-j",
+    "--num-of-cpus",
+    required=False,
+    type=int,
+    default=None,
+    help=(
+        "Number of CPUs to use for running scripts in parallel. If not specified, uses "
+        "the maximum number of CPUs avaliable in the system."
+    ),
+)
+
+parser.add_argument(
+    "-M",
+    "--mass-limit",
+    required=True,
+    type=float,
+    help=(
+        "Mass limit (in Msun) above which galaxies are included in morphological plots."
+    ),
+)
+
+# Not sure if this is still relevant...
+parser.add_argument(
+    "-g",
+    "--num-of-galaxies",
+    required=True,
+    type=int,
+    help=("Number of galaxies for which individual plots are made."),
+)
+
+if __name__ == "__main__":
+
+    from velociraptor import load as load_catalogue
+    from swiftsimio import load as load_snapshot
+
+    from morpholopy.filtered_catalogue import FilteredCatalogue
+    from morpholopy.galaxy_data import process_galaxy, AllGalaxyData
+
+    import unyt
+
+    # minimise the memory footprint of parallel processes by ensuring only
+    # relevant data in memory are copied
+    mp.set_start_method("forkserver")
+
+    args = parser.parse_args()
+
+    # config?
+    """
+    config = Config(config_directory=args.config)
+
+    if config.matplotlib_stylesheet != "default":
+        stylesheet_path = f"{config.config_directory}/{config.matplotlib_stylesheet}"
+        style.use(stylesheet_path)
+    """
+
+    snapshots = [
+        load_snapshot(f"{input}/{snapshot}")
+        for input, snapshot in zip(args.input, args.snapshots)
+    ]
+    if args.run_names is not None:
+        run_names = args.run_names
+    else:
+        # First, check if the snapshots are all at the same redshift
+        redshifts = {data.metadata.redshift for data in snapshots}
+        # If the size of the set is one, then all redshifts are the same
+        if len(redshifts) == 1:
+            # All redshifts are the same! No need to modify runs' names
+            run_names = [data.metadata.run_name for data in snapshots]
+        # If the size of the set > 1, then at least two runs have different redshifts
+        else:
+            # Need to append appropriate redshifts to names.
+            run_names = [
+                f"{data.metadata.run_name} (z={data.metadata.redshift:1.3f})"
+                for data in snapshots
+            ]
+
+    # observational data will be added later
+    """
+    observational_data_path = (
+        f"{config.config_directory}/{config.observational_data_directory}/data"
+    )
+    """
+
+    is_comparison = len(args.snapshots) > 1
+
+    if not is_comparison:
+        halo_catalogue_filename = f"{args.input[0]}/{args.catalogues[0]}"
+        snapshot_filename = f"{args.input[0]}/{args.snapshots[0]}"
+
+        catalogue = load_catalogue(halo_catalogue_filename, disregard_units=True)
+        filtered_catalogue = FilteredCatalogue(catalogue, args.mass_limit * unyt.Msun)
+        # close the catalogue by unloading it explicitly
+        catalogue = None
+
+        # create an empty object to store morphological data for all galaxies
+        number_of_galaxies = len(filtered_catalogue.galaxy_indices)
+        all_galaxies = AllGalaxyData(number_of_galaxies)
+
+        # create a list of arguments for parallel processing
+        arglist = [
+            (index, galaxy_index, halo_catalogue_filename, snapshot_filename)
+            for index, galaxy_index in enumerate(filtered_catalogue.galaxy_indices)
+        ]
+
+        # determine the appropriate number of parallel processes to use
+        num_proc = args.num_of_cpus
+        if num_proc is None:
+            num_proc = mp.cpu_count()
+        # make sure we don't use more processes than there are galaxies
+        num_proc = min(num_proc, number_of_galaxies)
+        pool = mp.Pool(num_proc)
+        for index, galaxy_data in pool.imap_unordered(process_galaxy, arglist):
+            # serial version (has better crash reports)
+            # for index, galaxy_data in map(process_galaxy, arglist):
+            # add galaxy contribution to global data
+            all_galaxies[index] = galaxy_data
+
+        print(all_galaxies.data)
+
+        # save plot data using the given metadata name
+        metadata_filename = (
+            f"{args.input[0]}/{args.metadata}_{args.snapshots[0][-9:-5]}.yml"
+        )
+    else:
+        # Need to generate our data again from the built-in yaml files.
+        metadata_filenames = [
+            f"{input}/{args.metadata}_{snapshot[-9:-5]}.yml"
+            for input, snapshot in zip(args.input, args.snapshots)
+        ]
+
+        # recreate data from metadata files
+
+        if not os.path.exists(args.output):
+            os.mkdir(args.output)
+
+    # Create the webpage
+    """
+    webpage = WebpageCreator()
+    webpage.add_auto_plotter_metadata(auto_plotter_metadata=auto_plotter_metadata)
+    webpage.add_config_metadata(config=config, is_comparison=is_comparison)
+    webpage.add_metadata(page_name=" | ".join(run_names))
+    webpage.add_run_metadata(config=config, snapshots=snapshots)
+    webpage.render_webpage()
+    webpage.save_html(f"{args.output}/index.html")
+    """

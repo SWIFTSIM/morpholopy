@@ -1,0 +1,21 @@
+# Python environments
+env/*
+black_formatting_env/*
+
+# Compiled files
+*__pycache__*
+
+# Packaging files
+build/*
+dist/*
+swiftsimio.egg-info
+
+# Test data
+test_data/*
+
+# Code coverage
+htmlcov/*
+.coverage
+
+# MacOS
+*.DS_Store
