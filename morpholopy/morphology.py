@@ -55,11 +55,6 @@ def calculate_morphology(
     coordinates, velocities, mass, box, galaxy_center, galaxy_velocity
 ):
 
-    # make a local copy of the coordinates and velocities, to avoid overwriting the old ones when
-    # recentering
-    coordinates = coordinates.copy()
-    velocities = velocities.copy()
-
     # recenter galaxy
     coordinates[:, :] -= galaxy_center[None, :]
     coordinates[:, :] += 0.5 * box[None, :]
@@ -111,4 +106,4 @@ def calculate_morphology(
 
     specific_momentum.convert_to_units("kpc*km/s")
 
-    return kappa_co, specific_momentum, axis_1, axis_2, axis_3
+    return momentum, (kappa_co, specific_momentum, axis_1, axis_2, axis_3)

@@ -6,8 +6,11 @@ from velociraptor.swift.swift import to_swiftsimio_dataset
 import unyt
 
 from .morphology import calculate_morphology
+from .KS import calculate_surface_densities
 
 data_fields = [
+    ("stellar_mass", np.float32),
+    ("half_mass_radius_star", np.float32),
     ("kappa_co", np.float32),
     ("momentum", np.float32),
     ("axis_ca", np.float32),
@@ -30,8 +33,15 @@ class GalaxyData:
     def __init__(self):
         self.data = np.zeros(1, dtype=data_fields)
 
+    def __getitem__(self, key):
+        return self.data[0][key]
+
     def __setitem__(self, key, value):
-        self.data[0][key] = value
+        if isinstance(key, list):
+            for k, v in zip(key, value):
+                self.data[0][k] = v
+        else:
+            self.data[0][key] = value
 
 
 class AllGalaxyData:
@@ -40,6 +50,46 @@ class AllGalaxyData:
 
     def __setitem__(self, index, galaxy_data):
         self.data[index] = galaxy_data.data[0]
+
+    def output(self, output_path, simulation_name):
+
+        mask = self.data["momentum"] > 0.0
+        np.savetxt(
+            f"{output_path}/momentum_parttype_4_{simulation_name}.new.txt",
+            self.data[mask][["stellar_mass", "momentum"]],
+        )
+
+        mask = self.data["kappa_co"] > 0.0
+        np.savetxt(
+            f"{output_path}/Kappa_co_parttype_4_{simulation_name}.new.txt",
+            self.data[mask][["stellar_mass", "kappa_co"]],
+        )
+
+        mask = self.data["axis_ca"] > 0.0
+        np.savetxt(
+            f"{output_path}/Axis_ratios_parttype_4_{simulation_name}.new.txt",
+            self.data[mask][["stellar_mass", "axis_ca", "axis_cb", "axis_ba"]],
+        )
+
+        mask = self.data["gas_momentum"] > 0.0
+        np.savetxt(
+            f"{output_path}/momentum_parttype_0_{simulation_name}.new.txt",
+            self.data[mask][["stellar_mass", "gas_momentum"]],
+        )
+
+        mask = self.data["gas_kappa_co"] > 0.0
+        np.savetxt(
+            f"{output_path}/Kappa_co_parttype_0_{simulation_name}.new.txt",
+            self.data[mask][["stellar_mass", "gas_kappa_co"]],
+        )
+
+        mask = self.data["gas_axis_ca"] > 0.0
+        np.savetxt(
+            f"{output_path}/Axis_ratios_parttype_0_{simulation_name}.new.txt",
+            self.data[mask][
+                ["stellar_mass", "gas_axis_ca", "gas_axis_cb", "gas_axis_ba"]
+            ],
+        )
 
 
 def process_galaxy(args):
@@ -68,6 +118,13 @@ def process_galaxy(args):
             catalogue.velocities.vzcminpot[galaxy_index],
         ]
     )
+
+    galaxy_data["stellar_mass"] = catalogue.apertures.mass_star_30_kpc[galaxy_index].to(
+        "Msun"
+    )
+    galaxy_data["half_mass_radius_star"] = catalogue.radii.r_halfmass_star[
+        galaxy_index
+    ].to("kpc")
 
     particles, _ = groups.extract_halo(halo_id=galaxy_index)
 
@@ -123,9 +180,10 @@ def process_galaxy(args):
     # get the box size (for periodic wrapping)
     box = data.metadata.boxsize * data.metadata.a
 
-    galaxy_data["kappa_co"], galaxy_data["momentum"], galaxy_data[
-        "axis_ca"
-    ], galaxy_data["axis_cb"], galaxy_data["axis_ba"] = calculate_morphology(
+    # Note: these functions will recenter the coordinates and velocities
+    stars_angular_momentum, galaxy_data[
+        ["kappa_co", "momentum", "axis_ca", "axis_cb", "axis_ba"]
+    ] = calculate_morphology(
         stars_coordinates,
         stars_velocities,
         stars_mass,
@@ -133,10 +191,19 @@ def process_galaxy(args):
         galaxy_center,
         galaxy_velocity,
     )
-    galaxy_data["gas_kappa_co"], galaxy_data["gas_momentum"], galaxy_data[
-        "gas_axis_ca"
-    ], galaxy_data["gas_axis_cb"], galaxy_data["gas_axis_ba"] = calculate_morphology(
+    gas_angular_momentum, galaxy_data[
+        ["gas_kappa_co", "gas_momentum", "gas_axis_ca", "gas_axis_cb", "gas_axis_ba"]
+    ] = calculate_morphology(
         gas_coordinates, gas_velocities, gas_mass, box, galaxy_center, galaxy_velocity
+    )
+
+    galaxy_data[["sigma_H2", "sigma_gas", "sigma_SFR"]] = calculate_surface_densities(
+        gas_coordinates,
+        gas_HI,
+        gas_H2,
+        gas_sfr,
+        gas_angular_momentum,
+        galaxy_data["half_mass_radius_star"],
     )
 
     return index, galaxy_data

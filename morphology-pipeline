@@ -219,14 +219,16 @@ if __name__ == "__main__":
             num_proc = mp.cpu_count()
         # make sure we don't use more processes than there are galaxies
         num_proc = min(num_proc, number_of_galaxies)
+        """
         pool = mp.Pool(num_proc)
         for index, galaxy_data in pool.imap_unordered(process_galaxy, arglist):
-            # serial version (has better crash reports)
-            # for index, galaxy_data in map(process_galaxy, arglist):
+        """
+        # serial version (has better crash reports)
+        for index, galaxy_data in map(process_galaxy, arglist):
             # add galaxy contribution to global data
             all_galaxies[index] = galaxy_data
 
-        print(all_galaxies.data)
+        all_galaxies.output(args.output, run_names[0])
 
         # save plot data using the given metadata name
         metadata_filename = (
