@@ -197,7 +197,7 @@ def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
     return HIsize, HImass
 
 
-def plot_HI_size_mass(output_path, name_list):
+def plot_HI_size_mass(output_path, name_list, all_galaxies_list):
 
     fit_slope = 0.501
     fit_intercept = -3.252
@@ -240,12 +240,9 @@ def plot_HI_size_mass(output_path, name_list):
         label="Rajohnson et al. (2022)",
     )
 
-    for i, name in enumerate(name_list):
-        data = np.loadtxt(
-            f"{output_path}/HI_size_mass_{name}.txt",
-            dtype=[("size", "f8"), ("mass", "f8")],
-        )
-        pl.loglog(data["mass"], data["size"], "o", color=f"C{i}", label=name)
+    for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        print(data["HI_mass"], data["HI_size"])
+        pl.loglog(data["HI_mass"], data["HI_size"], "o", color=f"C{i}", label=name)
 
     pl.xlabel("M$_{\\rm{}HI}$ (M$_\\odot$)")
     pl.ylabel("D$_{\\rm{}HI}$ (kpc)")

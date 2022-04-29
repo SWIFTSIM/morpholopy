@@ -18,8 +18,6 @@ parser = ap.ArgumentParser(
     epilog=("Example usage: TO PROVIDE\n"),
 )
 
-# no configuration?
-"""
 parser.add_argument(
     "-C",
     "--config",
@@ -27,7 +25,6 @@ parser.add_argument(
     required=True,
     help=("Configuration directory, containing config.yml."),
 )
-"""
 
 parser.add_argument(
     "-c",
@@ -147,7 +144,18 @@ if __name__ == "__main__":
     from morpholopy.filtered_catalogue import FilteredCatalogue
     from morpholopy.galaxy_data import process_galaxy, AllGalaxyData
 
+    from morpholopy.HI_size import plot_HI_size_mass
+
+    from swiftpipeline.config import Config
+    from swiftpipeline.html import WebpageCreator
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as pl
+
     import unyt
+    import os
 
     # minimise the memory footprint of parallel processes by ensuring only
     # relevant data in memory are copied
@@ -155,14 +163,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # config?
-    """
     config = Config(config_directory=args.config)
 
     if config.matplotlib_stylesheet != "default":
         stylesheet_path = f"{config.config_directory}/{config.matplotlib_stylesheet}"
-        style.use(stylesheet_path)
-    """
+        pl.style.use(stylesheet_path)
 
     snapshots = [
         load_snapshot(f"{input}/{snapshot}")
@@ -194,6 +199,7 @@ if __name__ == "__main__":
 
     is_comparison = len(args.snapshots) > 1
 
+    all_galaxies_list = []
     if not is_comparison:
         halo_catalogue_filename = f"{args.input[0]}/{args.catalogues[0]}"
         snapshot_filename = f"{args.input[0]}/{args.snapshots[0]}"
@@ -233,25 +239,30 @@ if __name__ == "__main__":
             f"{args.input[0]}/{args.metadata}_{args.snapshots[0][-9:-5]}.txt"
         )
         all_galaxies.output(metadata_filename)
+
+        # regenerate the data from the file, for consistency with the comparison case
+        all_galaxies_list = [AllGalaxyData.fromfile(metadata_filename)]
     else:
         # Need to generate our data again from the built-in yaml files.
         metadata_filenames = [
-            f"{input}/{args.metadata}_{snapshot[-9:-5]}.yml"
+            f"{input}/{args.metadata}_{snapshot[-9:-5]}.txt"
             for input, snapshot in zip(args.input, args.snapshots)
         ]
 
         # recreate data from metadata files
+        all_galaxies_list = [
+            AllGalaxyData.fromfile(filename) for filename in metadata_filenames
+        ]
 
-        if not os.path.exists(args.output):
-            os.mkdir(args.output)
+    if not os.path.exists(args.output):
+        os.mkdir(args.output)
+
+    plot_HI_size_mass(args.output, run_names, all_galaxies_list)
 
     # Create the webpage
-    """
     webpage = WebpageCreator()
-    webpage.add_auto_plotter_metadata(auto_plotter_metadata=auto_plotter_metadata)
     webpage.add_config_metadata(config=config, is_comparison=is_comparison)
     webpage.add_metadata(page_name=" | ".join(run_names))
     webpage.add_run_metadata(config=config, snapshots=snapshots)
     webpage.render_webpage()
     webpage.save_html(f"{args.output}/index.html")
-    """

@@ -1,0 +1,7 @@
+description_template: description.html
+
+scripts:
+  - section: Test
+    caption: Test
+    output_file: HI_size_mass.png
+    title: Test

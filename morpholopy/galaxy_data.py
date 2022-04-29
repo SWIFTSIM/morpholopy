@@ -46,37 +46,47 @@ class GalaxyData:
 
 
 class AllGalaxyData:
+    output_order = [
+        "stellar_mass",
+        "momentum",
+        "kappa_co",
+        "axis_ca",
+        "axis_cb",
+        "axis_ba",
+        "gas_momentum",
+        "gas_kappa_co",
+        "gas_axis_ca",
+        "gas_axis_cb",
+        "gas_axis_ba",
+        "sigma_H2",
+        "sigma_gas",
+        "sigma_SFR",
+        "HI_size",
+        "HI_mass",
+    ]
+
     def __init__(self, number_of_galaxies):
         self.data = np.zeros(number_of_galaxies, dtype=data_fields)
+
+    def fromfile(filename):
+        dtype = []
+        for key in AllGalaxyData.output_order:
+            dtype.append((key, np.float32))
+        data = np.loadtxt(filename, dtype=dtype)
+        all_galaxies = AllGalaxyData(len(data))
+        for key in AllGalaxyData.output_order:
+            all_galaxies.data[key] = data[key]
+        return all_galaxies
+
+    def __getitem__(self, key):
+        return self.data[key]
 
     def __setitem__(self, index, galaxy_data):
         self.data[index] = galaxy_data.data[0]
 
     def output(self, output_name):
 
-        np.savetxt(
-            output_name,
-            self.data[
-                [
-                    "stellar_mass",
-                    "momentum",
-                    "kappa_co",
-                    "axis_ca",
-                    "axis_cb",
-                    "axis_ba",
-                    "gas_momentum",
-                    "gas_kappa_co",
-                    "gas_axis_ca",
-                    "gas_axis_cb",
-                    "gas_axis_ba",
-                    "sigma_H2",
-                    "sigma_gas",
-                    "sigma_SFR",
-                    "HI_size",
-                    "HI_mass",
-                ]
-            ],
-        )
+        np.savetxt(output_name, self.data[AllGalaxyData.output_order])
 
 
 def process_galaxy(args):
