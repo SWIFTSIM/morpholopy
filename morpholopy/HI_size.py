@@ -57,6 +57,7 @@ def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
 
     image = sw.visualisation.project_gas(
         data=data,
+        project="HI_mass",
         resolution=resolution,
         mask=gas_mask,
         rotation_center=unyt.unyt_array(

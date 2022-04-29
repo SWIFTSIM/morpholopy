@@ -1,46 +1,63 @@
 import numpy as np
-from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
+import swiftsimio as sw
+import unyt
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as pl
 
 
-def calculate_integrated_quantities(
-    gas_coordinates, mass_variable, SFR, ang_momentum, radius
+def calculate_surface_densities_grid(
+    data, face_on_rmatrix, gas_mask, index, resolution=128
 ):
 
-    face_on_rotation_matrix = rotation_matrix_from_vector(ang_momentum)
+    R = 30.0 * unyt.kpc
 
-    x, y, _ = np.matmul(face_on_rotation_matrix, gas_coordinates.T)
-    r = np.sqrt(x ** 2 + y ** 2)
-    select = r <= radius
+    images = {}
+
+    for q in ["HI_mass", "H2_mass", "H_neutral_mass", "star_formation_rates"]:
+        images[q] = sw.visualisation.project_gas(
+            data=data,
+            project=q,
+            resolution=resolution,
+            mask=gas_mask,
+            rotation_center=unyt.unyt_array(
+                [0.0, 0.0, 0.0], units=data.gas.coordinates.units
+            ),
+            rotation_matrix=face_on_rmatrix,
+            region=[-R, R, -R, R, -R, R],
+        )
+        print(q, images[q].units)
+
+    for q in ["HI_mass", "H2_mass", "H_neutral_mass"]:
+        images[f"tgas_{q}"] = images[q] / images["star_formation_rates"]
+        images[f"tgas_{q}"].convert_to_units("yr")
+        images[q].convert_to_units("Msun/kpc**2")
+
+    images["star_formation_rates"].convert_to_units("Msun/yr/kpc**2")
+
+    for q in images:
+        pl.imshow(np.log10(images[q]))
+        pl.savefig(f"test_surfdens_{q}_{index:03d}.png", dpi=300)
+        pl.close()
+
+
+def calculate_integrated_surface_densities(data, face_on_rmatrix, gas_mask, radius):
 
     surface = np.pi * radius ** 2
 
-    # If we have gas within rhalfMs
-    if len(mass_variable) > 0:
-        Sigma_gas = np.log10(np.sum(mass_variable) / surface) - 6.0  # Msun / pc^2
+    x, y, _ = np.matmul(face_on_rmatrix, data.gas.coordinates[gas_mask].T)
+    r = np.sqrt(x ** 2 + y ** 2)
+    select = gas_mask.copy()
+    select[gas_mask] = r < radius
 
-        sfr = SFR[SFR > 0.0]
-        Sigma_SFR = np.log10(np.sum(sfr) / surface)  # Msun / yr / kpc^2
+    Sigma_H2 = data.gas.H2_mass[select].sum() / surface
+    Sigma_gas = data.gas.H_neutral_mass[select].sum() / surface
+    select &= data.gas.star_formation_rates > 0.0
+    Sigma_SFR = data.gas.star_formation_rates[select].sum() / surface
 
-    else:
-        Sigma_gas = -6.5
-        Sigma_SFR = -6.5
-
-    return Sigma_gas, Sigma_SFR
-
-
-def calculate_surface_densities(
-    gas_coordinates, gas_HI, gas_H2, gas_sfr, angular_momentum, half_mass_radius_star
-):
-
-    Sigma_H2, Sigma_SFR_H2 = calculate_integrated_quantities(
-        gas_coordinates, gas_H2, gas_sfr, angular_momentum, half_mass_radius_star
+    return (
+        Sigma_H2.to("Msun/pc**2"),
+        Sigma_gas.to("Msun/pc**2"),
+        Sigma_SFR.to("Msun/yr/kpc**2"),
     )
-    Sigma_gas, Sigma_SFR = calculate_integrated_quantities(
-        gas_coordinates,
-        gas_H2 + gas_HI,
-        gas_sfr,
-        angular_momentum,
-        half_mass_radius_star,
-    )
-
-    return Sigma_H2, Sigma_gas, Sigma_SFR

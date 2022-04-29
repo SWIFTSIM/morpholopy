@@ -6,7 +6,7 @@ from velociraptor.swift.swift import to_swiftsimio_dataset
 import unyt
 
 from .morphology import calculate_morphology, get_angular_momentum_vector
-from .KS import calculate_surface_densities
+from .KS import calculate_integrated_surface_densities
 from .HI_size import calculate_HI_size
 
 data_fields = [
@@ -52,50 +52,30 @@ class AllGalaxyData:
     def __setitem__(self, index, galaxy_data):
         self.data[index] = galaxy_data.data[0]
 
-    def output(self, output_path, simulation_name):
+    def output(self, output_name):
 
-        mask = self.data["momentum"] > 0.0
         np.savetxt(
-            f"{output_path}/momentum_parttype_4_{simulation_name}.new.txt",
-            self.data[mask][["stellar_mass", "momentum"]],
-        )
-
-        mask = self.data["kappa_co"] > 0.0
-        np.savetxt(
-            f"{output_path}/Kappa_co_parttype_4_{simulation_name}.new.txt",
-            self.data[mask][["stellar_mass", "kappa_co"]],
-        )
-
-        mask = self.data["axis_ca"] > 0.0
-        np.savetxt(
-            f"{output_path}/Axis_ratios_parttype_4_{simulation_name}.new.txt",
-            self.data[mask][["stellar_mass", "axis_ca", "axis_cb", "axis_ba"]],
-        )
-
-        mask = self.data["gas_momentum"] > 0.0
-        np.savetxt(
-            f"{output_path}/momentum_parttype_0_{simulation_name}.new.txt",
-            self.data[mask][["stellar_mass", "gas_momentum"]],
-        )
-
-        mask = self.data["gas_kappa_co"] > 0.0
-        np.savetxt(
-            f"{output_path}/Kappa_co_parttype_0_{simulation_name}.new.txt",
-            self.data[mask][["stellar_mass", "gas_kappa_co"]],
-        )
-
-        mask = self.data["gas_axis_ca"] > 0.0
-        np.savetxt(
-            f"{output_path}/Axis_ratios_parttype_0_{simulation_name}.new.txt",
-            self.data[mask][
-                ["stellar_mass", "gas_axis_ca", "gas_axis_cb", "gas_axis_ba"]
+            output_name,
+            self.data[
+                [
+                    "stellar_mass",
+                    "momentum",
+                    "kappa_co",
+                    "axis_ca",
+                    "axis_cb",
+                    "axis_ba",
+                    "gas_momentum",
+                    "gas_kappa_co",
+                    "gas_axis_ca",
+                    "gas_axis_cb",
+                    "gas_axis_ba",
+                    "sigma_H2",
+                    "sigma_gas",
+                    "sigma_SFR",
+                    "HI_size",
+                    "HI_mass",
+                ]
             ],
-        )
-
-        mask = self.data["HI_size"] > 0.0
-        np.savetxt(
-            f"{output_path}/HI_size_mass_{simulation_name}.new.txt",
-            self.data[mask][["stellar_mass", "HI_size", "HI_mass"]],
         )
 
 
@@ -129,9 +109,8 @@ def process_galaxy(args):
     galaxy_data["stellar_mass"] = catalogue.apertures.mass_star_30_kpc[galaxy_index].to(
         "Msun"
     )
-    galaxy_data["half_mass_radius_star"] = catalogue.radii.r_halfmass_star[
-        galaxy_index
-    ].to("kpc")
+    r_halfmass_star = catalogue.radii.r_halfmass_star[galaxy_index]
+    galaxy_data["half_mass_radius_star"] = r_halfmass_star.to("kpc")
 
     particles, _ = groups.extract_halo(halo_id=galaxy_index)
 
@@ -187,6 +166,20 @@ def process_galaxy(args):
     # get the box size (for periodic wrapping)
     box = data.metadata.boxsize * data.metadata.a
 
+    data.gas.HI_mass = (
+        data.gas.species_fractions.HI
+        * data.gas.element_mass_fractions.hydrogen
+        * data.gas.masses
+    )
+    data.gas.H2_mass = (
+        2.0
+        * data.gas.species_fractions.H2
+        * data.gas.element_mass_fractions.hydrogen
+        * data.gas.masses
+    )
+    data.gas.star_formation_rates.convert_to_physical()
+    data.gas.H_neutral_mass = data.gas.HI_mass + data.gas.H2_mass
+
     data.gas.coordinates.convert_to_physical()
     data.gas.coordinates[:, :] -= galaxy_center[None, :]
     data.gas.coordinates[:, :] += 0.5 * box[None, :]
@@ -194,8 +187,17 @@ def process_galaxy(args):
     data.gas.coordinates[:, :] -= 0.5 * box[None, :]
     data.gas.smoothing_lengths.convert_to_physical()
     gas_radius = unyt.array.unorm(data.gas.coordinates[:, :], axis=1)
-    gas_mask = mask.gas
+    gas_mask = mask.gas.copy()
     gas_mask[mask.gas] = gas_radius[mask.gas] < 30.0 * unyt.kpc
+
+    data.stars.coordinates.convert_to_physical()
+    data.stars.coordinates[:, :] -= galaxy_center[None, :]
+    data.stars.coordinates[:, :] += 0.5 * box[None, :]
+    data.stars.coordinates[:, :] %= box[None, :]
+    data.stars.coordinates[:, :] -= 0.5 * box[None, :]
+    stars_radius = unyt.array.unorm(data.stars.coordinates[:, :], axis=1)
+    stars_mask = mask.stars.copy()
+    stars_mask[mask.stars] = stars_radius[mask.stars] < 30.0 * unyt.kpc
 
     # determine the angular momentum vector and corresponding face-on and
     # edge-on rotation matrices
@@ -219,16 +221,11 @@ def process_galaxy(args):
         gas_coordinates, gas_velocities, gas_mass, box, galaxy_center, galaxy_velocity
     )
 
-    """
-    galaxy_data[["sigma_H2", "sigma_gas", "sigma_SFR"]] = calculate_surface_densities(
-        gas_coordinates,
-        gas_HI,
-        gas_H2,
-        gas_sfr,
-        gas_angular_momentum,
-        galaxy_data["half_mass_radius_star"],
+    galaxy_data[
+        ["sigma_H2", "sigma_gas", "sigma_SFR"]
+    ] = calculate_integrated_surface_densities(
+        data, face_on_rmatrix, gas_mask, r_halfmass_star
     )
-    """
 
     galaxy_data[["HI_size", "HI_mass"]] = calculate_HI_size(
         data, face_on_rmatrix, gas_mask, index

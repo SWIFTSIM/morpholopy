@@ -88,10 +88,10 @@ parser.add_argument(
     "-m",
     "--metadata",
     required=False,
-    default="data",
+    default="morphology_data",
     help=(
         "Base name of the written metadata file in the input directory. "
-        "By default this is data, leading to data_XXXX.yml"
+        "By default this is morphology_data, leading to morphology_data_XXXX.txt"
     ),
 )
 
@@ -220,20 +220,19 @@ if __name__ == "__main__":
         # make sure we don't use more processes than there are galaxies
         num_proc = min(num_proc, number_of_galaxies)
         """
-        pool = mp.Pool(num_proc)
-        for index, galaxy_data in pool.imap_unordered(process_galaxy, arglist):
-        """
         # serial version (has better crash reports)
         for index, galaxy_data in map(process_galaxy, arglist):
+        """
+        pool = mp.Pool(num_proc)
+        for index, galaxy_data in pool.imap_unordered(process_galaxy, arglist):
             # add galaxy contribution to global data
             all_galaxies[index] = galaxy_data
 
-        all_galaxies.output(args.output, run_names[0])
-
         # save plot data using the given metadata name
         metadata_filename = (
-            f"{args.input[0]}/{args.metadata}_{args.snapshots[0][-9:-5]}.yml"
+            f"{args.input[0]}/{args.metadata}_{args.snapshots[0][-9:-5]}.txt"
         )
+        all_galaxies.output(metadata_filename)
     else:
         # Need to generate our data again from the built-in yaml files.
         metadata_filenames = [
