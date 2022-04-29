@@ -113,16 +113,16 @@ def process_galaxy(args):
 
     galaxy_center = unyt.unyt_array(
         [
-            catalogue.positions.xcminpot[galaxy_index],
-            catalogue.positions.ycminpot[galaxy_index],
-            catalogue.positions.zcminpot[galaxy_index],
+            catalogue.positions.xcmbp[galaxy_index],
+            catalogue.positions.ycmbp[galaxy_index],
+            catalogue.positions.zcmbp[galaxy_index],
         ]
     )
     galaxy_velocity = unyt.unyt_array(
         [
-            catalogue.velocities.vxcminpot[galaxy_index],
-            catalogue.velocities.vycminpot[galaxy_index],
-            catalogue.velocities.vzcminpot[galaxy_index],
+            catalogue.velocities.vxcmbp[galaxy_index],
+            catalogue.velocities.vycmbp[galaxy_index],
+            catalogue.velocities.vzcmbp[galaxy_index],
         ]
     )
 
@@ -231,7 +231,7 @@ def process_galaxy(args):
     """
 
     galaxy_data[["HI_size", "HI_mass"]] = calculate_HI_size(
-        data, face_on_rmatrix, gas_mask
+        data, face_on_rmatrix, gas_mask, index
     )
 
     return index, galaxy_data
