@@ -5,8 +5,9 @@ from velociraptor.particles import load_groups
 from velociraptor.swift.swift import to_swiftsimio_dataset
 import unyt
 
-from .morphology import calculate_morphology
+from .morphology import calculate_morphology, get_angular_momentum_vector
 from .KS import calculate_surface_densities
+from .HI_size import calculate_HI_size
 
 data_fields = [
     ("stellar_mass", np.float32),
@@ -89,6 +90,12 @@ class AllGalaxyData:
             self.data[mask][
                 ["stellar_mass", "gas_axis_ca", "gas_axis_cb", "gas_axis_ba"]
             ],
+        )
+
+        mask = self.data["HI_size"] > 0.0
+        np.savetxt(
+            f"{output_path}/HI_size_mass_{simulation_name}.new.txt",
+            self.data[mask][["stellar_mass", "HI_size", "HI_mass"]],
         )
 
 
@@ -180,8 +187,23 @@ def process_galaxy(args):
     # get the box size (for periodic wrapping)
     box = data.metadata.boxsize * data.metadata.a
 
-    # Note: these functions will recenter the coordinates and velocities
-    stars_angular_momentum, galaxy_data[
+    data.gas.coordinates.convert_to_physical()
+    data.gas.coordinates[:, :] -= galaxy_center[None, :]
+    data.gas.coordinates[:, :] += 0.5 * box[None, :]
+    data.gas.coordinates[:, :] %= box[None, :]
+    data.gas.coordinates[:, :] -= 0.5 * box[None, :]
+    data.gas.smoothing_lengths.convert_to_physical()
+    gas_radius = unyt.array.unorm(data.gas.coordinates[:, :], axis=1)
+    gas_mask = mask.gas
+    gas_mask[mask.gas] = gas_radius[mask.gas] < 30.0 * unyt.kpc
+
+    # determine the angular momentum vector and corresponding face-on and
+    # edge-on rotation matrices
+    face_on_rmatrix, edge_on_rmatrix = get_angular_momentum_vector(
+        stars_coordinates, stars_velocities, stars_mass, galaxy_center, galaxy_velocity
+    )
+
+    galaxy_data[
         ["kappa_co", "momentum", "axis_ca", "axis_cb", "axis_ba"]
     ] = calculate_morphology(
         stars_coordinates,
@@ -191,12 +213,13 @@ def process_galaxy(args):
         galaxy_center,
         galaxy_velocity,
     )
-    gas_angular_momentum, galaxy_data[
+    galaxy_data[
         ["gas_kappa_co", "gas_momentum", "gas_axis_ca", "gas_axis_cb", "gas_axis_ba"]
     ] = calculate_morphology(
         gas_coordinates, gas_velocities, gas_mass, box, galaxy_center, galaxy_velocity
     )
 
+    """
     galaxy_data[["sigma_H2", "sigma_gas", "sigma_SFR"]] = calculate_surface_densities(
         gas_coordinates,
         gas_HI,
@@ -204,6 +227,11 @@ def process_galaxy(args):
         gas_sfr,
         gas_angular_momentum,
         galaxy_data["half_mass_radius_star"],
+    )
+    """
+
+    galaxy_data[["HI_size", "HI_mass"]] = calculate_HI_size(
+        data, face_on_rmatrix, gas_mask
     )
 
     return index, galaxy_data

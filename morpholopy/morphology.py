@@ -1,5 +1,35 @@
 import numpy as np
 import unyt
+from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
+
+
+def get_angular_momentum_vector(rparticles, vparticles, mparticles, rgalaxy, vgalaxy):
+
+    r = rparticles - rgalaxy
+    v = vparticles - vgalaxy
+    m = mparticles.copy()
+
+    d = np.linalg.norm(r, axis=1)
+
+    # mask out the innermost x% of star particles
+    dmin = np.quantile(d, 0.3, axis=0)
+    dmax = np.quantile(d, 0.5, axis=0)
+    m[d < dmin] = 0.0
+    m[d > dmax] = 0.0
+
+    L = np.cross(r, v)
+    L[:, 0] *= m
+    L[:, 1] *= m
+    L[:, 2] *= m
+
+    Ltotal = np.sum(L, axis=0)
+
+    Ltotal = Ltotal / np.linalg.norm(Ltotal)
+
+    face_on_rotation_matrix = rotation_matrix_from_vector(Ltotal)
+    edge_on_rotation_matrix = rotation_matrix_from_vector(Ltotal, axis="y")
+
+    return face_on_rotation_matrix, edge_on_rotation_matrix
 
 
 def AxialRatios(rs, ms):
@@ -55,6 +85,9 @@ def calculate_morphology(
     coordinates, velocities, mass, box, galaxy_center, galaxy_velocity
 ):
 
+    coordinates = coordinates.copy()
+    velocities = velocities.copy()
+
     # recenter galaxy
     coordinates[:, :] -= galaxy_center[None, :]
     coordinates[:, :] += 0.5 * box[None, :]
@@ -106,4 +139,4 @@ def calculate_morphology(
 
     specific_momentum.convert_to_units("kpc*km/s")
 
-    return momentum, (kappa_co, specific_momentum, axis_1, axis_2, axis_3)
+    return kappa_co, specific_momentum, axis_1, axis_2, axis_3
