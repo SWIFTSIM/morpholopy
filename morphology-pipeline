@@ -88,7 +88,7 @@ parser.add_argument(
     default="morphology_data",
     help=(
         "Base name of the written metadata file in the input directory. "
-        "By default this is morphology_data, leading to morphology_data_XXXX.txt"
+        "By default this is morphology_data, leading to morphology_data_XXXX.yml"
     ),
 )
 
@@ -236,7 +236,7 @@ if __name__ == "__main__":
 
         # save plot data using the given metadata name
         metadata_filename = (
-            f"{args.input[0]}/{args.metadata}_{args.snapshots[0][-9:-5]}.txt"
+            f"{args.input[0]}/{args.metadata}_{args.snapshots[0][-9:-5]}.yml"
         )
         all_galaxies.output(metadata_filename)
 
@@ -245,7 +245,7 @@ if __name__ == "__main__":
     else:
         # Need to generate our data again from the built-in yaml files.
         metadata_filenames = [
-            f"{input}/{args.metadata}_{snapshot[-9:-5]}.txt"
+            f"{input}/{args.metadata}_{snapshot[-9:-5]}.yml"
             for input, snapshot in zip(args.input, args.snapshots)
         ]
 
