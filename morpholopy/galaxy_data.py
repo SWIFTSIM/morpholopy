@@ -7,7 +7,11 @@ import unyt
 import yaml
 
 from .morphology import calculate_morphology, get_angular_momentum_vector
-from .KS import calculate_integrated_surface_densities
+from .KS import (
+    calculate_integrated_surface_densities,
+    calculate_spatially_resolved_KS,
+    calculate_azimuthally_averaged_KS,
+)
 from .HI_size import calculate_HI_size
 from .medians import accumulate_median_data, compute_median
 
@@ -32,14 +36,38 @@ data_fields = [
 ]
 
 medians = {
-    "sigma_gas_SFR_azimuth": {
+    "sigma_gas_SFR_spatial": {
         "number of bins x": 100,
         "log x": True,
         "range in x": [-1.0, 4.0],
         "number of bins y": 100,
         "log y": True,
         "range in y": [-6.0, 1.0],
-    }
+    },
+    "sigma_H2_SFR_spatial": {
+        "number of bins x": 100,
+        "log x": True,
+        "range in x": [-1.0, 4.0],
+        "number of bins y": 100,
+        "log y": True,
+        "range in y": [-6.0, 1.0],
+    },
+    "sigma_gas_SFR_azimuthal": {
+        "number of bins x": 100,
+        "log x": True,
+        "range in x": [-1.0, 4.0],
+        "number of bins y": 100,
+        "log y": True,
+        "range in y": [-6.0, 1.0],
+    },
+    "sigma_H2_SFR_azimuthal": {
+        "number of bins x": 100,
+        "log x": True,
+        "range in x": [-1.0, 4.0],
+        "number of bins y": 100,
+        "log y": True,
+        "range in y": [-6.0, 1.0],
+    },
 }
 
 median_data_fields = []
@@ -68,7 +96,7 @@ class GalaxyData:
         else:
             self.data[0][key] = value
 
-    def register_median(self, key, values_x, values_y):
+    def accumulate_median_data(self, key, values_x, values_y):
         self.median_data[0][key] = accumulate_median_data(
             medians[key], values_x, values_y
         )
@@ -242,6 +270,10 @@ def process_galaxy(args):
         * data.gas.element_mass_fractions.hydrogen
         * data.gas.masses
     )
+    # mask out negative SFR values, which are not SFR at all
+    data.gas.star_formation_rates[
+        data.gas.star_formation_rates < 0.0 * data.gas.star_formation_rates.units
+    ] = (0.0 * data.gas.star_formation_rates.units)
     data.gas.star_formation_rates.convert_to_physical()
     data.gas.H_neutral_mass = data.gas.HI_mass + data.gas.H2_mass
 
@@ -291,6 +323,17 @@ def process_galaxy(args):
     ] = calculate_integrated_surface_densities(
         data, face_on_rmatrix, gas_mask, r_halfmass_star
     )
+
+    sigma_gas, sigma_H2, sigma_SFR = calculate_spatially_resolved_KS(
+        data, face_on_rmatrix, gas_mask, index
+    )
+    galaxy_data.accumulate_median_data("sigma_gas_SFR_spatial", sigma_gas, sigma_SFR)
+    galaxy_data.accumulate_median_data("sigma_H2_SFR_spatial", sigma_H2, sigma_SFR)
+    sigma_gas, sigma_H2, sigma_SFR = calculate_azimuthally_averaged_KS(
+        data, face_on_rmatrix, gas_mask, index
+    )
+    galaxy_data.accumulate_median_data("sigma_gas_SFR_azimuthal", sigma_gas, sigma_SFR)
+    galaxy_data.accumulate_median_data("sigma_H2_SFR_azimuthal", sigma_H2, sigma_SFR)
 
     galaxy_data[["HI_size", "HI_mass"]] = calculate_HI_size(
         data, face_on_rmatrix, gas_mask, index
