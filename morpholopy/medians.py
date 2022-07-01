@@ -15,6 +15,10 @@ def accumulate_median_data(median, values_x, values_y):
     counts = np.zeros(nx * ny, dtype=np.uint32)
     range_x = median["range in x"]
     range_y = median["range in y"]
+    # values outside the x range need to be masked
+    mask = (xval >= range_x[0]) & (xval <= range_x[1])
+    xval = xval[mask]
+    yval = yval[mask]
     index_x = np.clip(
         np.floor((xval - range_x[0]) / (range_x[1] - range_x[0]) * nx), 0, nx - 1
     )
@@ -39,55 +43,201 @@ def compute_median(median, median_data):
     ny = median["number of bins y"]
     range_x = median["range in x"]
     range_y = median["range in y"]
+
     xbin_edges = np.linspace(range_x[0], range_x[1], nx + 1)
-    xbin_centres = 0.5 * (xbin_edges[:-1] + xbin_edges[1:])
-    ycum_counts = np.cumsum(median_data, axis=1)
-    ymed_idx = np.clip(
-        np.argmax(ycum_counts[:, :] > ycum_counts[:, -1, None] // 2, axis=1), 0, ny - 1
-    )
     ybin_edges = np.linspace(range_y[0], range_y[1], ny + 1)
-    ymedian = 0.5 * (ybin_edges[ymed_idx] + ybin_edges[ymed_idx + 1])
+    xbin_centres = 0.5 * (xbin_edges[:-1] + xbin_edges[1:])
+
+    ycum_counts = np.cumsum(median_data, axis=1)
+    median_target = ycum_counts[:, -1] / 2
+    is_below_target = ycum_counts < median_target[:, None]
+    is_above_target = ycum_counts > median_target[:, None]
+    ymed_idx_m = np.clip(np.argmin(is_below_target, axis=1), 0, ny - 1)
+    ymed_idx_p = np.clip(np.argmax(is_above_target, axis=1) + 1, 1, ny)
+
+    ym = ybin_edges[ymed_idx_m]
+    yp = ybin_edges[ymed_idx_p]
+    if median["log y"]:
+        ym = 10.0 ** ym
+        yp = 10.0 ** yp
+    ymedian = 0.5 * (ym + yp)
+
     if median["log x"]:
         xbin_centres = 10.0 ** xbin_centres
-    if median["log y"]:
-        ymedian = 10.0 ** ymedian
-    ymedian[ycum_counts[:, -1] == 0] = np.nan
+
+    ymedian[median_target == 0] = np.nan
     return xbin_centres, ymedian
 
 
 def test_median():
 
+    import scipy.stats as stats
+
+    seed = None
+    do_plots = False
+
+    if not seed is None:
+        np.random.seed(seed)
+    else:
+        seed = np.random.randint(0xFFFFFFFF)
+        np.random.seed(seed)
+    print(f"random seed: {seed}")
+
+    # normal test: linear-linear scale
     median = {
         "number of bins x": 100,
-        "number of bins y": 1000,
-        "log x": True,
-        "log y": True,
-        "range in x": [-3.0, 0.0],
-        "range in y": [-4.0, 0.0],
+        "number of bins y": 100,
+        "log x": False,
+        "log y": False,
+        "range in x": [0.0, 1.0],
+        "range in y": [-0.1, 1.1],
     }
 
     xvals = np.random.random(1000)
-    yvals = xvals ** 2 + 0.1 * np.random.random(1000)
+    yvals = np.random.random(1000)
 
     median_data = accumulate_median_data(median, xvals, yvals)
 
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as pl
-    import scipy.stats as stats
-
     xmed, ymed = compute_median(median, median_data)
-    refbins = np.logspace(-3.0, 0.0, 11)
+
+    refbins = np.linspace(
+        median["range in x"][0], median["range in x"][1], median["number of bins x"] + 1
+    )
     refmed, _, _ = stats.binned_statistic(
         xvals, yvals, statistic="median", bins=refbins
     )
-    refbins = 0.5 * (refbins[1:] + refbins[:-1])
 
-    pl.loglog(xvals, yvals, ".")
-    pl.plot(xmed, ymed, "-")
-    pl.plot(refbins, refmed, "-")
-    pl.savefig("median_test.png", dpi=300)
+    if do_plots:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as pl
+
+        for edge in refbins:
+            pl.gca().axvline(
+                x=edge, color="k", alpha=0.5, linestyle="--", linewidth=0.5
+            )
+        pl.plot(xvals, yvals, ".")
+        pl.plot(xmed, ymed, "o-")
+        refbins = 0.5 * (refbins[1:] + refbins[:-1])
+        pl.plot(refbins, refmed, "o--")
+        pl.ylim(*median["range in y"])
+        pl.xlim(*median["range in x"])
+        pl.savefig("median_test_linlin.png", dpi=300)
+        pl.close()
+
+    assert len(ymed) == len(refmed)
+    dy = (median["range in y"][1] - median["range in y"][0]) / median[
+        "number of bins y"
+    ]
+    maxdev = 0.5 * dy
+    for ym, rm in zip(ymed, refmed):
+        if not (np.isnan(ym) or np.isnan(rm)):
+            assert abs(ym - rm) < maxdev
+
+    # variation 1: log-linear scale
+    median = {
+        "number of bins x": 100,
+        "number of bins y": 100,
+        "log x": True,
+        "log y": False,
+        "range in x": [-3.0, 0.0],
+        "range in y": [-0.1, 1.1],
+    }
+
+    xvals = np.random.random(1000)
+    yvals = np.random.random(1000)
+
+    median_data = accumulate_median_data(median, xvals, yvals)
+
+    xmed, ymed = compute_median(median, median_data)
+
+    refbins = np.logspace(
+        median["range in x"][0], median["range in x"][1], median["number of bins x"] + 1
+    )
+    refmed, _, _ = stats.binned_statistic(
+        xvals, yvals, statistic="median", bins=refbins
+    )
+
+    if do_plots:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as pl
+
+        for edge in refbins:
+            pl.gca().axvline(
+                x=edge, color="k", alpha=0.5, linestyle="--", linewidth=0.5
+            )
+        pl.semilogx(xvals, yvals, ".")
+        pl.plot(xmed, ymed, "o-")
+        refbins = 10.0 ** (0.5 * (np.log10(refbins[1:]) + np.log10(refbins[:-1])))
+        pl.plot(refbins, refmed, "o--")
+        pl.ylim(*median["range in y"])
+        pl.xlim(10.0 ** median["range in x"][0], 10.0 ** median["range in x"][1])
+        pl.savefig("median_test_loglin.png", dpi=300)
+        pl.close()
+
+    assert len(ymed) == len(refmed)
+    dy = (median["range in y"][1] - median["range in y"][0]) / median[
+        "number of bins y"
+    ]
+    maxdev = 0.5 * dy
+    for ym, rm in zip(ymed, refmed):
+        if not (np.isnan(ym) or np.isnan(rm)):
+            assert abs(ym - rm) < maxdev
+
+    # variation 2: linear-log scale
+    median = {
+        "number of bins x": 100,
+        "number of bins y": 100,
+        "log x": False,
+        "log y": True,
+        "range in x": [0.0, 1.0],
+        "range in y": [-3.0, 0.0],
+    }
+
+    xvals = np.random.random(1000)
+    yvals = np.random.random(1000)
+
+    median_data = accumulate_median_data(median, xvals, yvals)
+
+    xmed, ymed = compute_median(median, median_data)
+
+    refbins = np.linspace(
+        median["range in x"][0], median["range in x"][1], median["number of bins x"] + 1
+    )
+    refmed, _, _ = stats.binned_statistic(
+        xvals, yvals, statistic="median", bins=refbins
+    )
+
+    if do_plots:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as pl
+
+        for edge in refbins:
+            pl.gca().axvline(
+                x=edge, color="k", alpha=0.5, linestyle="--", linewidth=0.5
+            )
+        pl.semilogy(xvals, yvals, ".")
+        pl.plot(xmed, ymed, "o-")
+        refbins = 0.5 * (refbins[1:] + refbins[:-1])
+        pl.plot(refbins, refmed, "o--")
+        pl.ylim(10.0 ** median["range in y"][0], 10.0 ** median["range in y"][1])
+        pl.xlim(*median["range in x"])
+        pl.savefig("median_test_linlog.png", dpi=300)
+        pl.close()
+
+    assert len(ymed) == len(refmed)
+    dy = (median["range in y"][1] - median["range in y"][0]) / median[
+        "number of bins y"
+    ]
+    maxdev = dy
+    for ym, rm in zip(ymed, refmed):
+        if not (np.isnan(ym) or np.isnan(rm)):
+            assert abs(np.log10(ym) - np.log10(rm)) < maxdev
 
 
 if __name__ == "__main__":
