@@ -85,7 +85,7 @@ def test_median():
 
     # normal test: linear-linear scale
     median = {
-        "number of bins x": 100,
+        "number of bins x": 50,
         "number of bins y": 100,
         "log x": False,
         "log y": False,
@@ -97,8 +97,12 @@ def test_median():
     yvals = np.random.random(1000)
 
     median_data = accumulate_median_data(median, xvals, yvals)
+    assert median_data.shape[0] == median["number of bins x"]
+    assert median_data.shape[1] == median["number of bins y"]
 
     xmed, ymed = compute_median(median, median_data)
+    assert xmed.shape[0] == median["number of bins x"]
+    assert ymed.shape[0] == median["number of bins x"]
 
     refbins = np.linspace(
         median["range in x"][0], median["range in x"][1], median["number of bins x"] + 1
@@ -137,7 +141,7 @@ def test_median():
 
     # variation 1: log-linear scale
     median = {
-        "number of bins x": 100,
+        "number of bins x": 50,
         "number of bins y": 100,
         "log x": True,
         "log y": False,
@@ -189,7 +193,7 @@ def test_median():
 
     # variation 2: linear-log scale
     median = {
-        "number of bins x": 100,
+        "number of bins x": 50,
         "number of bins y": 100,
         "log x": False,
         "log y": True,

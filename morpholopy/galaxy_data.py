@@ -37,7 +37,7 @@ data_fields = [
 
 medians = {
     "sigma_gas_SFR_spatial": {
-        "number of bins x": 100,
+        "number of bins x": 20,
         "log x": True,
         "range in x": [-1.0, 4.0],
         "number of bins y": 100,
@@ -45,7 +45,7 @@ medians = {
         "range in y": [-6.0, 1.0],
     },
     "sigma_H2_SFR_spatial": {
-        "number of bins x": 100,
+        "number of bins x": 20,
         "log x": True,
         "range in x": [-1.0, 4.0],
         "number of bins y": 100,
@@ -53,7 +53,7 @@ medians = {
         "range in y": [-6.0, 1.0],
     },
     "sigma_gas_SFR_azimuthal": {
-        "number of bins x": 100,
+        "number of bins x": 20,
         "log x": True,
         "range in x": [-1.0, 4.0],
         "number of bins y": 100,
@@ -61,7 +61,7 @@ medians = {
         "range in y": [-6.0, 1.0],
     },
     "sigma_H2_SFR_azimuthal": {
-        "number of bins x": 100,
+        "number of bins x": 20,
         "log x": True,
         "range in x": [-1.0, 4.0],
         "number of bins y": 100,
@@ -155,7 +155,7 @@ class AllGalaxyData:
     def compute_medians(self):
         self.medians = {}
         for key in medians:
-            xvals, yvals = compute_median(medians[key], self.median_data[key])
+            xvals, yvals = compute_median(medians[key], self.median_data[0][key])
             self.medians[key] = {
                 "x centers": xvals.tolist(),
                 "y values": yvals.tolist(),
