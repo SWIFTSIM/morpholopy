@@ -327,13 +327,24 @@ def process_galaxy(args):
     sigma_gas, sigma_H2, sigma_SFR = calculate_spatially_resolved_KS(
         data, face_on_rmatrix, gas_mask, index
     )
-    galaxy_data.accumulate_median_data("sigma_gas_SFR_spatial", sigma_gas, sigma_SFR)
-    galaxy_data.accumulate_median_data("sigma_H2_SFR_spatial", sigma_H2, sigma_SFR)
+    mask = (sigma_gas > 0.0) & (sigma_SFR > 0.0)
+    galaxy_data.accumulate_median_data(
+        "sigma_gas_SFR_spatial", sigma_gas[mask], sigma_SFR[mask]
+    )
+    mask = (sigma_H2 > 0.0) & (sigma_SFR > 0.0)
+    galaxy_data.accumulate_median_data(
+        "sigma_H2_SFR_spatial", sigma_H2[mask], sigma_SFR[mask]
+    )
     sigma_gas, sigma_H2, sigma_SFR = calculate_azimuthally_averaged_KS(
         data, face_on_rmatrix, gas_mask, index
     )
-    galaxy_data.accumulate_median_data("sigma_gas_SFR_azimuthal", sigma_gas, sigma_SFR)
-    galaxy_data.accumulate_median_data("sigma_H2_SFR_azimuthal", sigma_H2, sigma_SFR)
+    if not sigma_gas is None:
+        galaxy_data.accumulate_median_data(
+            "sigma_gas_SFR_azimuthal", sigma_gas, sigma_SFR
+        )
+        galaxy_data.accumulate_median_data(
+            "sigma_H2_SFR_azimuthal", sigma_H2, sigma_SFR
+        )
 
     galaxy_data[["HI_size", "HI_mass"]] = calculate_HI_size(
         data, face_on_rmatrix, gas_mask, index

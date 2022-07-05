@@ -76,6 +76,9 @@ def calculate_spatially_resolved_KS(data, face_on_rmatrix, gas_mask, index):
 
 
 def calculate_azimuthally_averaged_KS(data, face_on_rmatrix, gas_mask, index):
+    if gas_mask.sum() == 0:
+        return None, None, None
+
     bin_size = 0.75 * unyt.kpc
     x, y, _ = np.matmul(face_on_rmatrix, data.gas.coordinates[gas_mask].T)
     r = np.sqrt(x ** 2 + y ** 2).to("kpc")
