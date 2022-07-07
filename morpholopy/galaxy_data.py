@@ -43,6 +43,8 @@ medians = {
         "number of bins y": 100,
         "log y": True,
         "range in y": [-6.0, 1.0],
+        "x units": "Msun/pc**2",
+        "y units": "Msun/yr/kpc**2",
     },
     "sigma_H2_SFR_spatial": {
         "number of bins x": 20,
@@ -51,6 +53,8 @@ medians = {
         "number of bins y": 100,
         "log y": True,
         "range in y": [-6.0, 1.0],
+        "x units": "Msun/pc**2",
+        "y units": "Msun/yr/kpc**2",
     },
     "sigma_gas_SFR_azimuthal": {
         "number of bins x": 20,
@@ -59,6 +63,8 @@ medians = {
         "number of bins y": 100,
         "log y": True,
         "range in y": [-6.0, 1.0],
+        "x units": "Msun/pc**2",
+        "y units": "Msun/yr/kpc**2",
     },
     "sigma_H2_SFR_azimuthal": {
         "number of bins x": 20,
@@ -67,6 +73,8 @@ medians = {
         "number of bins y": 100,
         "log y": True,
         "range in y": [-6.0, 1.0],
+        "x units": "Msun/pc**2",
+        "y units": "Msun/yr/kpc**2",
     },
 }
 
