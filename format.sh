@@ -20,7 +20,9 @@ fi
 black="./black_formatting_env/bin/python3 -m black"
 
 # Formatting command
-cmd="$black -t py38 morphology-pipeline $(find . -name '*.py' -not -path './black_formatting_env/*')"
+files=$(find morpholopy -name '*.py')
+files="${files} morphology-pipeline"
+cmd="$black -t py38 morphology-pipeline ${files}"
 
 # Print the help
 function show_help {
