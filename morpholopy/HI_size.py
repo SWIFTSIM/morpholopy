@@ -53,7 +53,9 @@ def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
                 the default value (64) provides a good mix of accuracy and speed
     """
 
-    R = 30.0 * unyt.kpc
+    R = sw.objects.cosmo_array(
+        30.0 * unyt.kpc, comoving=False, cosmo_factor=data.gas.coordinates.cosmo_factor
+    )
 
     image = sw.visualisation.project_gas(
         data=data,

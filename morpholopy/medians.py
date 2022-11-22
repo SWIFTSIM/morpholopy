@@ -2,14 +2,20 @@ import numpy as np
 
 
 def accumulate_median_data(median, values_x, values_y):
+
+    xval = values_x.copy()
+    yval = values_y.copy()
+
     if median["log x"]:
-        xval = np.log10(values_x)
-    else:
-        xval = values_x
+        mask = xval > 0.0
+        xval = np.log10(xval[mask])
+        yval = yval[mask]
+
     if median["log y"]:
-        yval = np.log10(values_y)
-    else:
-        yval = values_y
+        mask = yval > 0.0
+        xval = xval[mask]
+        yval = np.log10(yval[mask])
+
     nx = median["number of bins x"]
     ny = median["number of bins y"]
     counts = np.zeros(nx * ny, dtype=np.uint32)

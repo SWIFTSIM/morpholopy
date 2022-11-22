@@ -215,7 +215,13 @@ if __name__ == "__main__":
 
         # create a list of arguments for parallel processing
         arglist = [
-            (index, galaxy_index, halo_catalogue_filename, snapshot_filename)
+            (
+                index,
+                galaxy_index,
+                halo_catalogue_filename,
+                snapshot_filename,
+                "stars_R0.5_0sigma",
+            )
             for index, galaxy_index in enumerate(filtered_catalogue.galaxy_indices)
         ]
 

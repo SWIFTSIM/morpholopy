@@ -1,5 +1,6 @@
 import numpy as np
 from swiftsimio import load as load_snapshot
+from swiftsimio.objects import cosmo_array
 from velociraptor import load as load_catalogue
 from velociraptor.particles import load_groups
 from velociraptor.swift.swift import to_swiftsimio_dataset
@@ -7,6 +8,7 @@ import unyt
 import yaml
 
 from .morphology import calculate_morphology, get_angular_momentum_vector
+from .orientation import get_orientation_matrices
 from .KS import (
     calculate_integrated_surface_densities,
     calculate_spatially_resolved_KS,
@@ -182,7 +184,7 @@ class AllGalaxyData:
 
 def process_galaxy(args):
 
-    index, galaxy_index, catalogue_filename, snapshot_filename = args
+    index, galaxy_index, catalogue_filename, snapshot_filename, orientation_type = args
 
     galaxy_data = GalaxyData()
 
@@ -191,27 +193,6 @@ def process_galaxy(args):
         catalogue_filename.replace(".properties", ".catalog_groups"),
         catalogue=catalogue,
     )
-
-    galaxy_center = unyt.unyt_array(
-        [
-            catalogue.positions.xcmbp[galaxy_index],
-            catalogue.positions.ycmbp[galaxy_index],
-            catalogue.positions.zcmbp[galaxy_index],
-        ]
-    )
-    galaxy_velocity = unyt.unyt_array(
-        [
-            catalogue.velocities.vxcmbp[galaxy_index],
-            catalogue.velocities.vycmbp[galaxy_index],
-            catalogue.velocities.vzcmbp[galaxy_index],
-        ]
-    )
-
-    galaxy_data["stellar_mass"] = catalogue.apertures.mass_star_30_kpc[galaxy_index].to(
-        "Msun"
-    )
-    r_halfmass_star = catalogue.radii.r_halfmass_star[galaxy_index]
-    galaxy_data["half_mass_radius_star"] = r_halfmass_star.to("kpc")
 
     particles, _ = groups.extract_halo(halo_index=galaxy_index)
 
@@ -238,6 +219,7 @@ def process_galaxy(args):
     gas_sfr = data.gas.star_formation_rates[mask.gas].to_physical()
     gas_rho = data.gas.densities[mask.gas].to_physical()
     gas_Z = data.gas.metal_mass_fractions[mask.gas] / 0.0134
+    gas_temp = data.gas.temperatures[mask.gas]
 
     # read relevant stars data
     stars_coordinates = data.stars.coordinates[mask.stars].to_physical()
@@ -263,6 +245,48 @@ def process_galaxy(args):
     stars_Z = data.stars.metal_mass_fractions[mask.stars]
     stars_init_mass = data.stars.initial_masses[mask.stars].to_physical()
     stars_density = stars_mass * (1.2348 / stars_hsml) ** 3
+
+    # get some properties from the catalogue
+    galaxy_center = cosmo_array(
+        unyt.unyt_array(
+            [
+                catalogue.positions.xcmbp[galaxy_index],
+                catalogue.positions.ycmbp[galaxy_index],
+                catalogue.positions.zcmbp[galaxy_index],
+            ]
+        ),
+        comoving=False,
+        cosmo_factor=data.gas.coordinates.cosmo_factor,
+    )
+    galaxy_velocity = cosmo_array(
+        unyt.unyt_array(
+            [
+                catalogue.velocities.vxcmbp[galaxy_index],
+                catalogue.velocities.vycmbp[galaxy_index],
+                catalogue.velocities.vzcmbp[galaxy_index],
+            ]
+        ),
+        comoving=False,
+        cosmo_factor=data.gas.velocities.cosmo_factor,
+    )
+
+    galaxy_data["stellar_mass"] = cosmo_array(
+        catalogue.apertures.mass_star_30_kpc[galaxy_index].to("Msun"),
+        comoving=False,
+        cosmo_factor=data.gas.masses.cosmo_factor,
+    )
+    r_halfmass_star = catalogue.radii.r_halfmass_star[galaxy_index]
+    galaxy_data["half_mass_radius_star"] = cosmo_array(
+        r_halfmass_star.to("kpc"),
+        comoving=False,
+        cosmo_factor=data.gas.coordinates.cosmo_factor,
+    )
+
+    Rhalf = cosmo_array(
+        catalogue.apertures.rhalfmass_star_50_kpc[galaxy_index],
+        comoving=False,
+        cosmo_factor=data.gas.coordinates.cosmo_factor,
+    )
 
     # get the box size (for periodic wrapping)
     box = data.metadata.boxsize * data.metadata.a
@@ -291,6 +315,8 @@ def process_galaxy(args):
     data.gas.coordinates[:, :] %= box[None, :]
     data.gas.coordinates[:, :] -= 0.5 * box[None, :]
     data.gas.smoothing_lengths.convert_to_physical()
+    data.gas.velocities.convert_to_physical()
+    data.gas.velocities[:, :] -= galaxy_velocity[None, :]
     gas_radius = unyt.array.unorm(data.gas.coordinates[:, :], axis=1)
     gas_mask = mask.gas.copy()
     gas_mask[mask.gas] = gas_radius[mask.gas] < 30.0 * unyt.kpc
@@ -300,16 +326,24 @@ def process_galaxy(args):
     data.stars.coordinates[:, :] += 0.5 * box[None, :]
     data.stars.coordinates[:, :] %= box[None, :]
     data.stars.coordinates[:, :] -= 0.5 * box[None, :]
+    data.stars.velocities.convert_to_physical()
+    data.stars.velocities[:, :] -= galaxy_velocity[None, :]
     stars_radius = unyt.array.unorm(data.stars.coordinates[:, :], axis=1)
     stars_mask = mask.stars.copy()
     stars_mask[mask.stars] = stars_radius[mask.stars] < 30.0 * unyt.kpc
 
     # determine the angular momentum vector and corresponding face-on and
     # edge-on rotation matrices
+    """
     face_on_rmatrix, edge_on_rmatrix = get_angular_momentum_vector(
         stars_coordinates, stars_velocities, stars_mass, galaxy_center, galaxy_velocity
     )
+    """
+    orientation_vector, face_on_rmatrix, edge_on_rmatrix = get_orientation_matrices(
+        data, galaxy_center, galaxy_velocity, Rhalf, orientation_type
+    )
 
+    """
     galaxy_data[
         ["kappa_co", "momentum", "axis_ca", "axis_cb", "axis_ba"]
     ] = calculate_morphology(
@@ -325,6 +359,7 @@ def process_galaxy(args):
     ] = calculate_morphology(
         gas_coordinates, gas_velocities, gas_mass, box, galaxy_center, galaxy_velocity
     )
+    """
 
     galaxy_data[
         ["sigma_H2", "sigma_gas", "sigma_SFR"]

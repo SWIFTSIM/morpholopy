@@ -15,7 +15,9 @@ def calculate_surface_densities_grid(
     data, face_on_rmatrix, gas_mask, index, resolution=128
 ):
 
-    R = 30.0 * unyt.kpc
+    R = sw.objects.cosmo_array(
+        30.0 * unyt.kpc, comoving=False, cosmo_factor=data.gas.coordinates.cosmo_factor
+    )
 
     images = {}
 
@@ -33,7 +35,11 @@ def calculate_surface_densities_grid(
         )
 
     for q in ["HI_mass", "H2_mass", "H_neutral_mass"]:
-        images[f"tgas_{q}"] = images[q] / images["star_formation_rates"]
+        images[f"tgas_{q}"] = unyt.unyt_array(np.zeros_like(images[q]), "yr")
+        mask = images["star_formation_rates"] > 0.0
+        images[f"tgas_{q}"][mask] = (
+            images[q][mask] / images["star_formation_rates"][mask]
+        )
         images[f"tgas_{q}"].convert_to_units("yr")
         images[q].convert_to_units("Msun/pc**2")
 
@@ -130,9 +136,9 @@ def calculate_integrated_surface_densities(data, face_on_rmatrix, gas_mask, radi
     surface = np.pi * radius ** 2
 
     x, y, _ = np.matmul(face_on_rmatrix, data.gas.coordinates[gas_mask].T)
-    r = np.sqrt(x ** 2 + y ** 2)
+    r = np.sqrt(x ** 2 + y ** 2).to("kpc").value
     select = gas_mask.copy()
-    select[gas_mask] = r < radius
+    select[gas_mask] = r < radius.to("kpc").value
 
     Sigma_H2 = data.gas.H2_mass[select].sum() / surface
     Sigma_gas = data.gas.H_neutral_mass[select].sum() / surface

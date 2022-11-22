@@ -36,7 +36,7 @@ def AxialRatios(rs, ms):
     """
     rs - CoM subtracted positions of *selected* particles in galactic units
     ms - *selected* particle masses in galactic units
-    zaza"""
+    """
     radius = np.linalg.norm(rs[:, :3], axis=1)
     rs = rs[radius > 0, :]
     ms = ms[radius > 0]
