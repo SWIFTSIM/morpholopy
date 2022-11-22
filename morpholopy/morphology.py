@@ -3,6 +3,86 @@ import unyt
 from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
 
 
+def get_axis_lengths(partdata, half_mass_radius, orientation_type):
+
+    _, aperture, clipping = orientation_type.split("_")
+
+    position = partdata.coordinates
+    velocity = partdata.velocities
+    mass = partdata.masses
+
+    radius = np.sqrt((position ** 2).sum(axis=1))
+    if aperture == "R0.5":
+        mask = radius < half_mass_radius
+
+    position = position[mask]
+    velocity = velocity[mask]
+    mass = mass[mask]
+    radius = radius[mask]
+
+    if clipping == "0sigma":
+        pass
+
+    weight = mass / radius ** 2
+
+    Itensor = (weight[:, None, None] / weight.sum()) * np.ones((weight.shape[0], 3, 3))
+    # Note: unyt currently ignores the position units in the *=
+    # i.e. Itensor is dimensionless throughout (even though it should not be)
+    for i in range(3):
+        for j in range(3):
+            Itensor[:, i, j] *= position[:, i] * position[:, j]
+    Itensor = Itensor.sum(axis=0)
+
+    # linalg.eigenvals cannot deal with units anyway, so we have to add them
+    # back in
+    axes = np.linalg.eigvals(Itensor).real
+    axes = np.clip(axes, 0.0, None)
+    axes = np.sqrt(axes) * position.units
+
+    # sort the axes from long to short
+    axes.sort()
+    axes = axes[::-1]
+
+    return axes
+
+
+def get_kappa_corot(partdata, half_mass_radius, orientation_type, orientation_vector):
+
+    _, aperture, clipping = orientation_type.split("_")
+
+    position = partdata.coordinates
+    velocity = partdata.velocities
+    mass = partdata.masses
+
+    radius = np.sqrt((position ** 2).sum(axis=1))
+    if aperture == "R0.5":
+        mask = radius < half_mass_radius
+
+    position = position[mask]
+    velocity = velocity[mask]
+    mass = mass[mask]
+    radius = radius[mask]
+
+    if clipping == "0sigma":
+        pass
+
+    K = 0.5 * (mass[:, None] * velocity ** 2).sum()
+    if K == 0.0:
+        return 0.0
+
+    # np.cross does not preserve units, so we need to multiply them back in
+    angular_momentum = (
+        (mass[:, None] * np.cross(position, velocity)) * position.units * velocity.units
+    )
+    Lz = (angular_momentum * orientation_vector[None, :]).sum(axis=1)
+    rdotL = (position * orientation_vector[None, :]).sum(axis=1)
+    R2 = radius ** 2 - rdotL ** 2
+    mask = (Lz > 0.0) & (R2 > 0.0)
+    Kcorot = 0.5 * (Lz[mask] ** 2 / (mass[mask] * R2[mask])).sum()
+
+    return Kcorot / K
+
+
 def get_angular_momentum_vector(rparticles, vparticles, mparticles, rgalaxy, vgalaxy):
 
     r = rparticles - rgalaxy

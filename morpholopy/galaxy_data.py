@@ -7,7 +7,12 @@ from velociraptor.swift.swift import to_swiftsimio_dataset
 import unyt
 import yaml
 
-from .morphology import calculate_morphology, get_angular_momentum_vector
+from .morphology import (
+    calculate_morphology,
+    get_angular_momentum_vector,
+    get_axis_lengths,
+    get_kappa_corot,
+)
 from .orientation import get_orientation_matrices
 from .KS import (
     calculate_integrated_surface_densities,
@@ -17,11 +22,13 @@ from .KS import (
 from .HI_size import calculate_HI_size
 from .medians import accumulate_median_data, compute_median
 
+from functools import reduce
+
 data_fields = [
     ("stellar_mass", np.float32),
     ("half_mass_radius_star", np.float32),
     ("kappa_co", np.float32),
-    ("momentum", np.float32),
+    ("momentum", (np.float32, 3)),
     ("axis_ca", np.float32),
     ("axis_cb", np.float32),
     ("axis_ba", np.float32),
@@ -199,32 +206,49 @@ def process_galaxy(args):
     data, mask = to_swiftsimio_dataset(
         particles, snapshot_filename, generate_extra_mask=True
     )
+    # mask out all particles that are actually bound to the galaxy
+    for parttype in ["gas", "dark_matter", "stars", "black_holes"]:
+        fields = reduce(
+            getattr, f"metadata.{parttype}_properties.field_names".split("."), data
+        )
+        partmask = getattr(mask, parttype)
+        for field in fields:
+            group = getattr(data, parttype)
+            dataset = getattr(group, field)
+            if hasattr(dataset, "named_columns"):
+                columns = dataset.named_columns
+                for column in columns:
+                    vals = getattr(dataset, column)[partmask].to_physical()
+                    setattr(dataset, column, vals)
+            else:
+                vals = dataset[partmask].to_physical()
+                setattr(group, field, vals)
 
     # read relevant gas data
-    gas_coordinates = data.gas.coordinates[mask.gas].to_physical()
-    gas_mass = data.gas.masses[mask.gas].to_physical()
-    gas_velocities = data.gas.velocities[mask.gas].to_physical()
-    gas_hsml = data.gas.smoothing_lengths[mask.gas].to_physical()
+    gas_coordinates = data.gas.coordinates.to_physical()
+    gas_mass = data.gas.masses.to_physical()
+    gas_velocities = data.gas.velocities.to_physical()
+    gas_hsml = data.gas.smoothing_lengths.to_physical()
     gas_HI = (
-        data.gas.species_fractions.HI[mask.gas]
-        * data.gas.element_mass_fractions.hydrogen[mask.gas]
+        data.gas.species_fractions.HI
+        * data.gas.element_mass_fractions.hydrogen
         * gas_mass
     )
     gas_H2 = (
         2.0
-        * data.gas.species_fractions.H2[mask.gas]
-        * data.gas.element_mass_fractions.hydrogen[mask.gas]
+        * data.gas.species_fractions.H2
+        * data.gas.element_mass_fractions.hydrogen
         * gas_mass
     )
-    gas_sfr = data.gas.star_formation_rates[mask.gas].to_physical()
-    gas_rho = data.gas.densities[mask.gas].to_physical()
-    gas_Z = data.gas.metal_mass_fractions[mask.gas] / 0.0134
-    gas_temp = data.gas.temperatures[mask.gas]
+    gas_sfr = data.gas.star_formation_rates.to_physical()
+    gas_rho = data.gas.densities.to_physical()
+    gas_Z = data.gas.metal_mass_fractions / 0.0134
+    gas_temp = data.gas.temperatures
 
     # read relevant stars data
-    stars_coordinates = data.stars.coordinates[mask.stars].to_physical()
-    stars_mass = data.stars.masses[mask.stars].to_physical()
-    stars_velocities = data.stars.velocities[mask.stars].to_physical()
+    stars_coordinates = data.stars.coordinates.to_physical()
+    stars_mass = data.stars.masses.to_physical()
+    stars_velocities = data.stars.velocities.to_physical()
     stars_hsml = (
         0.5
         * np.ones(stars_mass.shape)
@@ -234,7 +258,7 @@ def process_galaxy(args):
         * data.metadata.units.length
         * data.metadata.a
     )
-    stars_birthz = 1.0 / data.stars.birth_scale_factors[mask.stars] - 1.0
+    stars_birthz = 1.0 / data.stars.birth_scale_factors - 1.0
     # get age by using cosmology
     stars_age = (
         data.metadata.cosmology.age(data.metadata.z).value
@@ -242,8 +266,8 @@ def process_galaxy(args):
             [data.metadata.cosmology.age(birthz.value).value for birthz in stars_birthz]
         )
     ) * unyt.Gyr
-    stars_Z = data.stars.metal_mass_fractions[mask.stars]
-    stars_init_mass = data.stars.initial_masses[mask.stars].to_physical()
+    stars_Z = data.stars.metal_mass_fractions
+    stars_init_mass = data.stars.initial_masses.to_physical()
     stars_density = stars_mass * (1.2348 / stars_hsml) ** 3
 
     # get some properties from the catalogue
@@ -289,7 +313,11 @@ def process_galaxy(args):
     )
 
     # get the box size (for periodic wrapping)
-    box = data.metadata.boxsize * data.metadata.a
+    box = cosmo_array(
+        data.metadata.boxsize,
+        comoving=True,
+        cosmo_factor=data.gas.coordinates.cosmo_factor,
+    ).to_physical()
 
     data.gas.HI_mass = (
         data.gas.species_fractions.HI
@@ -318,8 +346,7 @@ def process_galaxy(args):
     data.gas.velocities.convert_to_physical()
     data.gas.velocities[:, :] -= galaxy_velocity[None, :]
     gas_radius = unyt.array.unorm(data.gas.coordinates[:, :], axis=1)
-    gas_mask = mask.gas.copy()
-    gas_mask[mask.gas] = gas_radius[mask.gas] < 30.0 * unyt.kpc
+    gas_mask = gas_radius < 30.0 * unyt.kpc
 
     data.stars.coordinates.convert_to_physical()
     data.stars.coordinates[:, :] -= galaxy_center[None, :]
@@ -329,8 +356,7 @@ def process_galaxy(args):
     data.stars.velocities.convert_to_physical()
     data.stars.velocities[:, :] -= galaxy_velocity[None, :]
     stars_radius = unyt.array.unorm(data.stars.coordinates[:, :], axis=1)
-    stars_mask = mask.stars.copy()
-    stars_mask[mask.stars] = stars_radius[mask.stars] < 30.0 * unyt.kpc
+    stars_mask = stars_radius < 30.0 * unyt.kpc
 
     # determine the angular momentum vector and corresponding face-on and
     # edge-on rotation matrices
@@ -360,7 +386,17 @@ def process_galaxy(args):
         gas_coordinates, gas_velocities, gas_mass, box, galaxy_center, galaxy_velocity
     )
     """
+    a, b, c = get_axis_lengths(data.stars, Rhalf, orientation_type)
+    kappa_corot = get_kappa_corot(
+        data.stars, Rhalf, orientation_type, orientation_vector
+    )
+    galaxy_data["axis_ca"] = c / a
+    galaxy_data["axis_cb"] = c / b
+    galaxy_data["axis_ba"] = b / a
+    galaxy_data["kappa_co"] = kappa_corot
+    galaxy_data["momentum"] = orientation_vector
 
+    """
     galaxy_data[
         ["sigma_H2", "sigma_gas", "sigma_SFR"]
     ] = calculate_integrated_surface_densities(
@@ -392,5 +428,6 @@ def process_galaxy(args):
     galaxy_data[["HI_size", "HI_mass"]] = calculate_HI_size(
         data, face_on_rmatrix, gas_mask, index
     )
+    """
 
     return index, galaxy_data

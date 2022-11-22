@@ -6,17 +6,16 @@ from swiftsimio.objects import cosmo_array
 def get_orientation_matrices(
     data, galaxy_position, galaxy_velocity, half_mass_radius, orientation_type
 ):
-    Ltype, aperture, clipping = orientation_type.split("_")
 
-    print(data, Ltype, aperture, clipping)
+    Ltype, aperture, clipping = orientation_type.split("_")
 
     position = None
     velocity = None
     mass = None
     if Ltype == "stars":
         position = data.stars.coordinates
-        velocity = data.stars.velocities - galaxy_velocity
-        mass = data.stars.masses.copy()
+        velocity = data.stars.velocities
+        mass = data.stars.masses
     else:
         raise RuntimeError(f"Unknown Ltype: {Ltype}!")
 
