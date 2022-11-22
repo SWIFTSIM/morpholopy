@@ -1,9 +1,10 @@
 import numpy as np
 import unyt
 from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
+from .orientation import get_orientation_mask
 
 
-def get_axis_lengths(partdata, half_mass_radius, orientation_type):
+def get_axis_lengths(partdata, half_mass_radius, R200crit, orientation_type):
 
     _, aperture, clipping = orientation_type.split("_")
 
@@ -12,8 +13,7 @@ def get_axis_lengths(partdata, half_mass_radius, orientation_type):
     mass = partdata.masses
 
     radius = np.sqrt((position ** 2).sum(axis=1))
-    if aperture == "R0.5":
-        mask = radius < half_mass_radius
+    mask = get_orientation_mask(radius, half_mass_radius, R200crit, aperture)
 
     position = position[mask]
     velocity = velocity[mask]
@@ -46,7 +46,9 @@ def get_axis_lengths(partdata, half_mass_radius, orientation_type):
     return axes
 
 
-def get_kappa_corot(partdata, half_mass_radius, orientation_type, orientation_vector):
+def get_kappa_corot(
+    partdata, half_mass_radius, R200crit, orientation_type, orientation_vector
+):
 
     _, aperture, clipping = orientation_type.split("_")
 
@@ -55,8 +57,7 @@ def get_kappa_corot(partdata, half_mass_radius, orientation_type, orientation_ve
     mass = partdata.masses
 
     radius = np.sqrt((position ** 2).sum(axis=1))
-    if aperture == "R0.5":
-        mask = radius < half_mass_radius
+    mask = get_orientation_mask(radius, half_mass_radius, R200crit, aperture)
 
     position = position[mask]
     velocity = velocity[mask]

@@ -127,6 +127,22 @@ parser.add_argument(
     ),
 )
 
+parser.add_argument(
+    "-O",
+    "--orientation",
+    type=str,
+    default="stars_R0.5_0sigma",
+    help=(
+        "String describing the way the orientation vector for face-on and edge-on "
+        "projections is constructed. This string consists of 3 parts. The first "
+        "part describes the galaxy component that is used (stars, gas, ISM gas, "
+        "HI gas, baryons), the second part describes the aperture radius (1x, "
+        "2x, 4x the stellar half mass radius within 50 kpc, a fixed 50 kpc "
+        "aperture or R200 crit). The final part describes the sigma clipping "
+        "in velocity space (0 - no clipping -, 1 or 2 sigma)."
+    ),
+)
+
 # Not sure if this is still relevant...
 parser.add_argument(
     "-g",
@@ -220,7 +236,7 @@ if __name__ == "__main__":
                 galaxy_index,
                 halo_catalogue_filename,
                 snapshot_filename,
-                "stars_R0.5_0sigma",
+                args.orientation,
             )
             for index, galaxy_index in enumerate(filtered_catalogue.galaxy_indices)
         ]
