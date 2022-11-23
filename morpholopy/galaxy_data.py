@@ -11,6 +11,7 @@ from .morphology import (
     calculate_morphology,
     get_angular_momentum_vector,
     get_axis_lengths,
+    get_new_axis_lengths,
     get_kappa_corot,
 )
 from .orientation import get_orientation_matrices
@@ -32,6 +33,7 @@ data_fields = [
     ("axis_ca", np.float32),
     ("axis_cb", np.float32),
     ("axis_ba", np.float32),
+    ("z_axis", (np.float32, 3)),
     ("gas_kappa_co", np.float32),
     ("gas_momentum", np.float32),
     ("gas_axis_ca", np.float32),
@@ -285,9 +287,9 @@ def process_galaxy(args):
     galaxy_velocity = cosmo_array(
         unyt.unyt_array(
             [
-                catalogue.velocities.vxcmbp[galaxy_index],
-                catalogue.velocities.vycmbp[galaxy_index],
-                catalogue.velocities.vzcmbp[galaxy_index],
+                catalogue.velocities.vxc[galaxy_index],
+                catalogue.velocities.vyc[galaxy_index],
+                catalogue.velocities.vzc[galaxy_index],
             ]
         ),
         comoving=False,
@@ -295,7 +297,7 @@ def process_galaxy(args):
     )
 
     galaxy_data["stellar_mass"] = cosmo_array(
-        catalogue.apertures.mass_star_30_kpc[galaxy_index].to("Msun"),
+        catalogue.apertures.mass_star_50_kpc[galaxy_index].to("Msun"),
         comoving=False,
         cosmo_factor=data.gas.masses.cosmo_factor,
     )
@@ -371,7 +373,7 @@ def process_galaxy(args):
     )
     """
     orientation_vector, face_on_rmatrix, edge_on_rmatrix = get_orientation_matrices(
-        data, galaxy_center, galaxy_velocity, Rhalf, R200crit, orientation_type
+        data, Rhalf, R200crit, orientation_type
     )
 
     """
@@ -390,14 +392,16 @@ def process_galaxy(args):
     ] = calculate_morphology(
         gas_coordinates, gas_velocities, gas_mass, box, galaxy_center, galaxy_velocity
     )
-    """
     a, b, c = get_axis_lengths(data.stars, Rhalf, R200crit, orientation_type)
+    """
+    (a, b, c), z_axis = get_new_axis_lengths(data, Rhalf, R200crit, orientation_type)
     kappa_corot = get_kappa_corot(
         data.stars, Rhalf, R200crit, orientation_type, orientation_vector
     )
     galaxy_data["axis_ca"] = c / a
     galaxy_data["axis_cb"] = c / b
     galaxy_data["axis_ba"] = b / a
+    galaxy_data["z_axis"] = z_axis
     galaxy_data["kappa_co"] = kappa_corot
     galaxy_data["momentum"] = orientation_vector
 

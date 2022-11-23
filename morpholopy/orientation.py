@@ -23,11 +23,26 @@ def get_orientation_mask(radius, half_mass_radius, R200crit, aperture):
     return mask
 
 
-def get_orientation_matrices(
-    data, galaxy_position, galaxy_velocity, half_mass_radius, R200crit, orientation_type
-):
+def get_orientation_mask_radius(half_mass_radius, R200crit, aperture):
+    radius = None
+    if aperture == "R0.5":
+        radius = half_mass_radius
+    elif aperture == "2xR0.5":
+        radius = 2.0 * half_mass_radius
+    elif aperture == "4xR0.5":
+        radius = 4.0 * half_mass_radius
+    elif aperture == "50kpc":
+        radius = cosmo_array(
+            50.0 * unyt.kpc, comoving=False, cosmo_factor=half_mass_radius.cosmo_factor
+        )
+    elif aperture == "R200crit":
+        radius = R200crit
+    else:
+        raise RuntimeError(f"Unknown aperture: {aperture}!")
+    return radius
 
-    Ltype, aperture, clipping = orientation_type.split("_")
+
+def get_mass_position_velocity_nomask(data, Ltype):
 
     position = None
     velocity = None
@@ -81,6 +96,15 @@ def get_orientation_matrices(
     else:
         raise RuntimeError(f"Unknown Ltype: {Ltype}!")
 
+    return mass, position, velocity
+
+
+def get_mass_position_velocity(data, half_mass_radius, R200crit, orientation_type):
+
+    Ltype, aperture, clipping = orientation_type.split("_")
+
+    mass, position, velocity = get_mass_position_velocity_nomask(data, Ltype)
+
     radius = np.sqrt((position ** 2).sum(axis=1))
     mask = get_orientation_mask(radius, half_mass_radius, R200crit, aperture)
 
@@ -90,6 +114,18 @@ def get_orientation_matrices(
 
     if clipping == "0sigma":
         pass
+
+    vcom = ((mass[:, None] / mass.sum()) * velocity).sum(axis=0)
+    velocity -= vcom[None, :]
+
+    return mass, position, velocity
+
+
+def get_orientation_matrices(data, half_mass_radius, R200crit, orientation_type):
+
+    mass, position, velocity = get_mass_position_velocity(
+        data, half_mass_radius, R200crit, orientation_type
+    )
 
     angular_momentum = (mass[:, None] * np.cross(position, velocity)).sum(axis=0)
     angular_momentum /= np.sqrt((angular_momentum ** 2).sum())

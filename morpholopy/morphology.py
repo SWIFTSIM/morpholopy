@@ -1,7 +1,109 @@
 import numpy as np
 import unyt
 from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
-from .orientation import get_orientation_mask
+from .orientation import (
+    get_orientation_mask,
+    get_mass_position_velocity,
+    get_mass_position_velocity_nomask,
+    get_orientation_mask_radius,
+)
+
+
+def get_new_axis_lengths(data, half_mass_radius, R200crit, orientation_type):
+
+    mass, position, velocity = get_mass_position_velocity(
+        data, half_mass_radius, R200crit, orientation_type
+    )
+    radius = np.sqrt((position ** 2).sum(axis=1))
+
+    weight = mass / radius ** 2
+
+    Itensor = (weight[:, None, None] / weight.sum()) * np.ones((weight.shape[0], 3, 3))
+    # Note: unyt currently ignores the position units in the *=
+    # i.e. Itensor is dimensionless throughout (even though it should not be)
+    for i in range(3):
+        for j in range(3):
+            Itensor[:, i, j] *= position[:, i] * position[:, j]
+
+    Itensor = Itensor.sum(axis=0)
+
+    # linalg.eigenvals cannot deal with units anyway, so we have to add them
+    # back in
+    axes, basis = np.linalg.eig(Itensor)
+    axes = axes.real
+    axes = np.clip(axes, 0.0, None)
+    axes = np.sqrt(axes) * position.units
+
+    # sort the axes from long to short
+    isort = np.argsort(axes)[::-1]
+    axes = axes[isort]
+    basis = basis[isort]
+
+    Ltype, aperture, _ = orientation_type.split("_")
+    all_mass, all_position, all_velocity = get_mass_position_velocity_nomask(
+        data, Ltype
+    )
+    R2 = get_orientation_mask_radius(half_mass_radius, R200crit, aperture) ** 2
+
+    c_a = axes[2] / axes[0]
+    b_a = axes[1] / axes[0]
+    old_c_a = 2.0 * c_a
+    old_b_a = 2.0 * b_a
+    loop = 0
+    while (abs((c_a - old_c_a) / (c_a + old_c_a)) > 0.01) or (
+        abs((b_a - old_b_a) / (b_a + old_b_a)) > 0.01
+    ):
+        loop += 1
+        if loop == 100:
+            print(
+                f"Too many iterations (c_a: {old_c_a} - {c_a}, b_a: {old_b_a} - {b_a} ({Ltype}_{aperture})!"
+            )
+            break
+        old_c_a = c_a
+        old_b_a = b_a
+
+        ra = (all_position * basis[0]).sum(axis=1)
+        rb = (all_position * basis[1]).sum(axis=1)
+        rc = (all_position * basis[2]).sum(axis=1)
+        mask = (ra ** 2 + rb ** 2 / b_a ** 2 + rc ** 2 / c_a ** 2) <= R2 / (
+            b_a * c_a
+        ) ** (2.0 / 3.0)
+
+        mass = all_mass[mask]
+        position = all_position[mask]
+        velocity = all_velocity[mask]
+
+        radius = np.sqrt((position ** 2).sum(axis=1))
+
+        weight = mass / radius ** 2
+
+        Itensor = (weight[:, None, None] / weight.sum()) * np.ones(
+            (weight.shape[0], 3, 3)
+        )
+        # Note: unyt currently ignores the position units in the *=
+        # i.e. Itensor is dimensionless throughout (even though it should not be)
+        for i in range(3):
+            for j in range(3):
+                Itensor[:, i, j] *= position[:, i] * position[:, j]
+
+        Itensor = Itensor.sum(axis=0)
+
+        # linalg.eigenvals cannot deal with units anyway, so we have to add them
+        # back in
+        axes, basis = np.linalg.eig(Itensor)
+        axes = axes.real
+        axes = np.clip(axes, 0.0, None)
+        axes = np.sqrt(axes) * position.units
+
+        # sort the axes from long to short
+        isort = np.argsort(axes)[::-1]
+        axes = axes[isort]
+        basis = basis[isort]
+
+        c_a = axes[2] / axes[0]
+        b_a = axes[1] / axes[0]
+
+    return axes, basis[2]
 
 
 def get_axis_lengths(partdata, half_mass_radius, R200crit, orientation_type):
