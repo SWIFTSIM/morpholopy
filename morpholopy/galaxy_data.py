@@ -318,6 +318,11 @@ def process_galaxy(args):
         comoving=False,
         cosmo_factor=data.gas.coordinates.cosmo_factor,
     )
+    Rvir = cosmo_array(
+        catalogue.radii.rvir[galaxy_index],
+        comoving=False,
+        cosmo_factor=data.gas.coordinates.cosmo_factor,
+    )
 
     # get the box size (for periodic wrapping)
     box = cosmo_array(
@@ -373,7 +378,7 @@ def process_galaxy(args):
     )
     """
     orientation_vector, face_on_rmatrix, edge_on_rmatrix = get_orientation_matrices(
-        data, Rhalf, R200crit, orientation_type
+        data, Rhalf, R200crit, Rvir, orientation_type
     )
 
     """
@@ -394,9 +399,11 @@ def process_galaxy(args):
     )
     a, b, c = get_axis_lengths(data.stars, Rhalf, R200crit, orientation_type)
     """
-    (a, b, c), z_axis = get_new_axis_lengths(data, Rhalf, R200crit, orientation_type)
+    (a, b, c), z_axis = get_new_axis_lengths(
+        data, Rhalf, R200crit, Rvir, orientation_type
+    )
     kappa_corot = get_kappa_corot(
-        data.stars, Rhalf, R200crit, orientation_type, orientation_vector
+        data.stars, Rhalf, R200crit, Rvir, orientation_type, orientation_vector
     )
     galaxy_data["axis_ca"] = c / a
     galaxy_data["axis_cb"] = c / b

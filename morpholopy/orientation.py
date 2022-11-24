@@ -4,41 +4,55 @@ from swiftsimio.objects import cosmo_array
 import unyt
 
 
-def get_orientation_mask(radius, half_mass_radius, R200crit, aperture):
+def get_orientation_mask(
+    radius, half_mass_radius, R200crit, Rvir, inner_aperture, outer_aperture
+):
     mask = None
-    if aperture == "R0.5":
-        mask = radius < half_mass_radius
-    elif aperture == "2xR0.5":
-        mask = radius < 2.0 * half_mass_radius
-    elif aperture == "4xR0.5":
-        mask = radius < 4.0 * half_mass_radius
-    elif aperture == "50kpc":
-        mask = radius < cosmo_array(
+    if inner_aperture == "0xR0.5":
+        mask = np.ones(radius.shape, dtype=bool)
+    elif inner_aperture == "0.5xR0.5":
+        mask = radius >= 0.5 * half_mass_radius
+    else:
+        raise RuntimeError(f"Unknown inner aperture: {inner_aperture}!")
+
+    if outer_aperture == "R0.5":
+        mask &= radius < half_mass_radius
+    elif outer_aperture == "2xR0.5":
+        mask &= radius < 2.0 * half_mass_radius
+    elif outer_aperture == "4xR0.5":
+        mask &= radius < 4.0 * half_mass_radius
+    elif outer_aperture == "50kpc":
+        mask &= radius < cosmo_array(
             50.0 * unyt.kpc, comoving=False, cosmo_factor=radius.cosmo_factor
         )
-    elif aperture == "R200crit":
-        mask = radius < R200crit
+    elif outer_aperture == "R200crit":
+        mask &= radius < R200crit
+    elif outer_aperture == "0.1Rvir":
+        mask &= radius < 0.1 * Rvir
     else:
-        raise RuntimeError(f"Unknown aperture: {aperture}!")
+        raise RuntimeError(f"Unknown outer aperture: {outer_aperture}!")
+
     return mask
 
 
-def get_orientation_mask_radius(half_mass_radius, R200crit, aperture):
+def get_orientation_mask_radius(half_mass_radius, R200crit, Rvir, outer_aperture):
     radius = None
-    if aperture == "R0.5":
+    if outer_aperture == "R0.5":
         radius = half_mass_radius
-    elif aperture == "2xR0.5":
+    elif outer_aperture == "2xR0.5":
         radius = 2.0 * half_mass_radius
-    elif aperture == "4xR0.5":
+    elif outer_aperture == "4xR0.5":
         radius = 4.0 * half_mass_radius
-    elif aperture == "50kpc":
+    elif outer_aperture == "50kpc":
         radius = cosmo_array(
             50.0 * unyt.kpc, comoving=False, cosmo_factor=half_mass_radius.cosmo_factor
         )
-    elif aperture == "R200crit":
+    elif outer_aperture == "R200crit":
         radius = R200crit
+    elif outer_aperture == "0.1Rvir":
+        radius = 0.1 * Rvir
     else:
-        raise RuntimeError(f"Unknown aperture: {aperture}!")
+        raise RuntimeError(f"Unknown outer aperture: {outer_aperture}!")
     return radius
 
 
@@ -99,14 +113,18 @@ def get_mass_position_velocity_nomask(data, Ltype):
     return mass, position, velocity
 
 
-def get_mass_position_velocity(data, half_mass_radius, R200crit, orientation_type):
+def get_mass_position_velocity(
+    data, half_mass_radius, R200crit, Rvir, orientation_type
+):
 
-    Ltype, aperture, clipping = orientation_type.split("_")
+    Ltype, inner_aperture, outer_aperture, clipping = orientation_type.split("_")
 
     mass, position, velocity = get_mass_position_velocity_nomask(data, Ltype)
 
     radius = np.sqrt((position ** 2).sum(axis=1))
-    mask = get_orientation_mask(radius, half_mass_radius, R200crit, aperture)
+    mask = get_orientation_mask(
+        radius, half_mass_radius, R200crit, Rvir, inner_aperture, outer_aperture
+    )
 
     position = position[mask]
     velocity = velocity[mask]
@@ -121,10 +139,10 @@ def get_mass_position_velocity(data, half_mass_radius, R200crit, orientation_typ
     return mass, position, velocity
 
 
-def get_orientation_matrices(data, half_mass_radius, R200crit, orientation_type):
+def get_orientation_matrices(data, half_mass_radius, R200crit, Rvir, orientation_type):
 
     mass, position, velocity = get_mass_position_velocity(
-        data, half_mass_radius, R200crit, orientation_type
+        data, half_mass_radius, R200crit, Rvir, orientation_type
     )
 
     angular_momentum = (mass[:, None] * np.cross(position, velocity)).sum(axis=0)

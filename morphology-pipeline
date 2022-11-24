@@ -131,7 +131,7 @@ parser.add_argument(
     "-O",
     "--orientation",
     type=str,
-    default="stars_R0.5_0sigma",
+    default="stars_0xR0.5_R0.5_0sigma",
     help=(
         "String describing the way the orientation vector for face-on and edge-on "
         "projections is constructed. This string consists of 3 parts. The first "

@@ -9,10 +9,10 @@ from .orientation import (
 )
 
 
-def get_new_axis_lengths(data, half_mass_radius, R200crit, orientation_type):
+def get_new_axis_lengths(data, half_mass_radius, R200crit, Rvir, orientation_type):
 
     mass, position, velocity = get_mass_position_velocity(
-        data, half_mass_radius, R200crit, orientation_type
+        data, half_mass_radius, R200crit, Rvir, orientation_type
     )
     radius = np.sqrt((position ** 2).sum(axis=1))
 
@@ -39,11 +39,14 @@ def get_new_axis_lengths(data, half_mass_radius, R200crit, orientation_type):
     axes = axes[isort]
     basis = basis[isort]
 
-    Ltype, aperture, _ = orientation_type.split("_")
+    Ltype, _, outer_aperture, _ = orientation_type.split("_")
     all_mass, all_position, all_velocity = get_mass_position_velocity_nomask(
         data, Ltype
     )
-    R2 = get_orientation_mask_radius(half_mass_radius, R200crit, aperture) ** 2
+    R2 = (
+        get_orientation_mask_radius(half_mass_radius, R200crit, Rvir, outer_aperture)
+        ** 2
+    )
 
     c_a = axes[2] / axes[0]
     b_a = axes[1] / axes[0]
@@ -56,7 +59,7 @@ def get_new_axis_lengths(data, half_mass_radius, R200crit, orientation_type):
         loop += 1
         if loop == 100:
             print(
-                f"Too many iterations (c_a: {old_c_a} - {c_a}, b_a: {old_b_a} - {b_a} ({Ltype}_{aperture})!"
+                f"Too many iterations (c_a: {old_c_a} - {c_a}, b_a: {old_b_a} - {b_a} ({Ltype}_{outer_aperture})!"
             )
             break
         old_c_a = c_a
@@ -106,7 +109,7 @@ def get_new_axis_lengths(data, half_mass_radius, R200crit, orientation_type):
     return axes, basis[2]
 
 
-def get_axis_lengths(partdata, half_mass_radius, R200crit, orientation_type):
+def get_axis_lengths(partdata, half_mass_radius, R200crit, Rvir, orientation_type):
 
     _, aperture, clipping = orientation_type.split("_")
 
@@ -115,7 +118,7 @@ def get_axis_lengths(partdata, half_mass_radius, R200crit, orientation_type):
     mass = partdata.masses
 
     radius = np.sqrt((position ** 2).sum(axis=1))
-    mask = get_orientation_mask(radius, half_mass_radius, R200crit, aperture)
+    mask = get_orientation_mask(radius, half_mass_radius, R200crit, Rvir, aperture)
 
     position = position[mask]
     velocity = velocity[mask]
@@ -149,17 +152,19 @@ def get_axis_lengths(partdata, half_mass_radius, R200crit, orientation_type):
 
 
 def get_kappa_corot(
-    partdata, half_mass_radius, R200crit, orientation_type, orientation_vector
+    partdata, half_mass_radius, R200crit, Rvir, orientation_type, orientation_vector
 ):
 
-    _, aperture, clipping = orientation_type.split("_")
+    _, inner_aperture, outer_aperture, clipping = orientation_type.split("_")
 
     position = partdata.coordinates
     velocity = partdata.velocities
     mass = partdata.masses
 
     radius = np.sqrt((position ** 2).sum(axis=1))
-    mask = get_orientation_mask(radius, half_mass_radius, R200crit, aperture)
+    mask = get_orientation_mask(
+        radius, half_mass_radius, R200crit, Rvir, inner_aperture, outer_aperture
+    )
 
     position = position[mask]
     velocity = velocity[mask]
