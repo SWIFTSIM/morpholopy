@@ -16,7 +16,14 @@ def get_new_axis_lengths(data, half_mass_radius, R200crit, Rvir, orientation_typ
     )
     radius = np.sqrt((position ** 2).sum(axis=1))
 
-    weight = mass / radius ** 2
+    weight = unyt.unyt_array(np.zeros(mass.shape), mass.units / radius.units ** 2)
+    weight[radius > 0.0] = (mass[radius > 0.0] / radius[radius > 0.0] ** 2).to(
+        weight.units
+    )
+
+    if weight.sum() == 0.0:
+        print("Total weight of 0, so not calculating axis lengths.")
+        return unyt.unyt_array(np.zeros(3), position.units), np.zeros(3)
 
     Itensor = (weight[:, None, None] / weight.sum()) * np.ones((weight.shape[0], 3, 3))
     # Note: unyt currently ignores the position units in the *=
@@ -78,7 +85,16 @@ def get_new_axis_lengths(data, half_mass_radius, R200crit, Rvir, orientation_typ
 
         radius = np.sqrt((position ** 2).sum(axis=1))
 
-        weight = mass / radius ** 2
+        weight = unyt.unyt_array(np.zeros(mass.shape), mass.units / radius.units ** 2)
+        weight[radius > 0.0] = (mass[radius > 0.0] / radius[radius > 0.0] ** 2).to(
+            weight.units
+        )
+
+        if weight.sum() == 0.0:
+            print(
+                "Total weight of 0, so not calculating axis lengths. Using last value that worked."
+            )
+            break
 
         Itensor = (weight[:, None, None] / weight.sum()) * np.ones(
             (weight.shape[0], 3, 3)
