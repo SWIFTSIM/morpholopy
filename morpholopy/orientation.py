@@ -130,11 +130,26 @@ def get_mass_position_velocity(
     velocity = velocity[mask]
     mass = mass[mask]
 
-    if clipping == "0sigma":
-        pass
-
     vcom = ((mass[:, None] / mass.sum()) * velocity).sum(axis=0)
     velocity -= vcom[None, :]
+
+    if clipping == "0sigma":
+        pass
+    elif clipping == "1sigma" or clipping == "2sigma":
+        angular_momentum = mass[:, None] * np.cross(position, velocity)
+        Lnorm = np.sqrt((angular_momentum ** 2).sum(axis=1))
+        Lmean = Lnorm.mean()
+        Lstd = Lnorm.std()
+        mask = None
+        if clipping == "1sigma":
+            mask = Lnorm <= Lmean + Lstd
+        elif clipping == "2sigma":
+            mask = Lnorm <= Lmean + 2.0 * Lstd
+        mass = mass[mask]
+        position = position[mask]
+        velocity = velocity[mask]
+    else:
+        raise RuntimeError(f"Unknown clipping: {clipping}!")
 
     return mass, position, velocity
 
