@@ -13,12 +13,16 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as pl
 
 
-def get_new_axis_lengths(data, half_mass_radius, R200crit, Rvir, orientation_type):
+def get_new_axis_lengths(partdata, half_mass_radius, mass_variable="masses"):
 
-    mass, position, velocity = get_mass_position_velocity(
-        data, half_mass_radius, R200crit, Rvir, orientation_type
-    )
-    radius = np.sqrt((position ** 2).sum(axis=1))
+    all_position = partdata.coordinates
+    all_mass = getattr(partdata, mass_variable)
+    all_radius = np.sqrt((all_position ** 2).sum(axis=1))
+
+    mask = all_radius <= 0.5 * half_mass_radius
+    position = all_position[mask]
+    mass = all_mass[mask]
+    radius = all_radius[mask]
 
     weight = unyt.unyt_array(np.zeros(mass.shape), mass.units / radius.units ** 2)
     weight[radius > 0.0] = (mass[radius > 0.0] / radius[radius > 0.0] ** 2).to(
@@ -50,14 +54,11 @@ def get_new_axis_lengths(data, half_mass_radius, R200crit, Rvir, orientation_typ
     axes = axes[isort]
     basis = basis[isort]
 
-    Ltype, _, outer_aperture, _ = orientation_type.split("_")
-    all_mass, all_position, all_velocity = get_mass_position_velocity_nomask(
-        data, Ltype
-    )
-    R2 = (
-        get_orientation_mask_radius(half_mass_radius, R200crit, Rvir, outer_aperture)
-        ** 2
-    )
+    R2 = (0.5 * half_mass_radius) ** 2
+
+    if (axes[0] == 0.0) or (axes[1] == 0.0) or (axes[2] == 0.0):
+        print(f"Zero axis ratio! Giving up on this galaxy.")
+        return unyt.unyt_array(np.zeros(3), position.units), np.zeros(3)
 
     c_a = axes[2] / axes[0]
     b_a = axes[1] / axes[0]
@@ -67,10 +68,15 @@ def get_new_axis_lengths(data, half_mass_radius, R200crit, Rvir, orientation_typ
     while (abs((c_a - old_c_a) / (c_a + old_c_a)) > 0.01) or (
         abs((b_a - old_b_a) / (b_a + old_b_a)) > 0.01
     ):
+
+        if (c_a == 0.0) or (b_a == 0.0):
+            print(f"Zero axis ratio! Giving up on this galaxy.")
+            return unyt.unyt_array(np.zeros(3), position.units), np.zeros(3)
+
         loop += 1
         if loop == 100:
             print(
-                f"Too many iterations (c_a: {old_c_a} - {c_a}, b_a: {old_b_a} - {b_a} ({Ltype}_{outer_aperture})!"
+                f"Too many iterations (c_a: {old_c_a} - {c_a}, b_a: {old_b_a} - {b_a})!"
             )
             break
         old_c_a = c_a
@@ -85,7 +91,6 @@ def get_new_axis_lengths(data, half_mass_radius, R200crit, Rvir, orientation_typ
 
         mass = all_mass[mask]
         position = all_position[mask]
-        velocity = all_velocity[mask]
 
         radius = np.sqrt((position ** 2).sum(axis=1))
 
@@ -126,7 +131,7 @@ def get_new_axis_lengths(data, half_mass_radius, R200crit, Rvir, orientation_typ
         c_a = axes[2] / axes[0]
         b_a = axes[1] / axes[0]
 
-    return axes, basis[2]
+    return axes, basis[2].real
 
 
 def get_kappa_corot(
@@ -157,7 +162,7 @@ def get_kappa_corot(
 
     K = 0.5 * (mass[:, None] * velocity ** 2).sum()
     if K == 0.0:
-        return 0.0
+        return 0.0, 0.0
 
     # np.cross does not preserve units, so we need to multiply them back in
     angular_momentum = (
@@ -302,10 +307,13 @@ def plot_morphology(output_path, name_list, all_galaxies_list):
     pl.close(fig_star)
 
     plots["Axis ratios"] = {
-        ratio_star_filename: {"title": "Axis ratios / Stars", "caption": "TO BE ADDED"},
+        ratio_star_filename: {
+            "title": "Axis ratios / Stars",
+            "caption": "Axial ratios of galaxies, based on the stars. a, b and c (a >= b >= c) represent the lengths of the primary axes. The axis lengths have been computed from the reduced moment of inertia tensor using the iterative scheme of Thob et al. (2018).",
+        },
         ratio_gas_filename: {
             "title": "Axis ratios / HI+H2 gas",
-            "caption": "TO BE ADDED",
+            "caption": "Axial ratios of galaxies, based on the neutral gas. a, b and c (a >= b >= c) represent the lengths of the primary axes. The axis lengths have been computed from the reduced moment of inertia tensor using the iterative scheme of Thob et al. (2018).",
         },
     }
 

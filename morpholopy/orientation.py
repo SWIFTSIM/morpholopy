@@ -161,9 +161,17 @@ def get_orientation_matrices(data, half_mass_radius, R200crit, Rvir, orientation
     )
 
     angular_momentum = (mass[:, None] * np.cross(position, velocity)).sum(axis=0)
-    angular_momentum /= np.sqrt((angular_momentum ** 2).sum())
-
-    angular_momentum = angular_momentum.value
+    angular_momentum_norm = np.sqrt((angular_momentum ** 2).sum())
+    if angular_momentum_norm > 0.0:
+        angular_momentum /= angular_momentum_norm
+        angular_momentum = angular_momentum.value
+    else:
+        # choose a random direction, i.e. the x axis
+        # note that we cannot choose the y or z axis, since that would cause
+        # problems in rotation_matrix_from_vector()
+        # (the z axis is the default rotation axis, the y axis is our chosen
+        # axis of rotation for the edge on view)
+        angular_momentum = np.array([1.0, 0.0, 0.0])
 
     face_on_rotation_matrix = rotation_matrix_from_vector(angular_momentum)
     edge_on_rotation_matrix = rotation_matrix_from_vector(angular_momentum, axis="y")

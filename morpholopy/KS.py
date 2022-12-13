@@ -133,6 +133,9 @@ def calculate_azimuthally_averaged_KS(data, face_on_rmatrix, gas_mask, index):
 
 def calculate_integrated_surface_densities(data, face_on_rmatrix, gas_mask, radius):
 
+    if radius == 0.0:
+        return 0.0, 0.0, 0.0
+
     surface = np.pi * radius ** 2
 
     x, y, _ = np.matmul(face_on_rmatrix, data.gas.coordinates[gas_mask].T)

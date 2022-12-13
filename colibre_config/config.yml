@@ -1,6 +1,6 @@
 description_template: description.html
 
-mass_limit_stars_in_Msun: 1.e8
+mass_limit_stars_in_Msun: 1.e6
 mass_variable_stars: apertures.mass_star_30_kpc
 mass_limit_gas_in_Msun: 0.
 mass_variable_gas: apertures.mass_gas_30_kpc

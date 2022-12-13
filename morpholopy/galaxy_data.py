@@ -35,7 +35,7 @@ data_fields = [
     ("gas_axis_ca", np.float32),
     ("gas_axis_cb", np.float32),
     ("gas_axis_ba", np.float32),
-    ("gas_z_axis", np.float32),
+    ("gas_z_axis", (np.float32, 3)),
     ("sigma_H2", np.float32),
     ("sigma_gas", np.float32),
     ("sigma_SFR", np.float32),
@@ -337,20 +337,27 @@ def process_galaxy(args):
         data, Rhalf, R200crit, Rvir, orientation_type
     )
 
-    (a, b, c), z_axis = get_new_axis_lengths(
-        data, Rhalf, R200crit, Rvir, orientation_type
-    )
+    (a, b, c), z_axis = get_new_axis_lengths(data.stars, Rhalf)
     stars_momentum, kappa_corot = get_kappa_corot(
         data.stars, Rhalf, R200crit, Rvir, orientation_type, orientation_vector
     )
-    galaxy_data["stars_axis_ca"] = c / a
-    galaxy_data["stars_axis_cb"] = c / b
-    galaxy_data["stars_axis_ba"] = b / a
-    galaxy_data["stars_z_axis"] = z_axis
+    if (a > 0.0) and (b > 0.0) and (c > 0.0):
+        galaxy_data["stars_axis_ca"] = c / a
+        galaxy_data["stars_axis_cb"] = c / b
+        galaxy_data["stars_axis_ba"] = b / a
+        galaxy_data["stars_z_axis"] = z_axis
     galaxy_data["stars_kappa_co"] = kappa_corot
     galaxy_data["orientation_vector"] = orientation_vector
     galaxy_data["stars_momentum"] = stars_momentum
 
+    (a, b, c), z_axis = get_new_axis_lengths(
+        data.gas, Rhalf, mass_variable="H_neutral_mass"
+    )
+    if (a > 0.0) and (b > 0.0) and (c > 0.0):
+        galaxy_data["gas_axis_ca"] = c / a
+        galaxy_data["gas_axis_cb"] = c / b
+        galaxy_data["gas_axis_ba"] = b / a
+        galaxy_data["gas_z_axis"] = z_axis
     galaxy_data[["gas_momentum", "gas_kappa_co"]] = get_kappa_corot(
         data.gas,
         Rhalf,

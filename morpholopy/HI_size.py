@@ -71,9 +71,16 @@ def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
 
     image.convert_to_units("Msun/pc**2")
 
+    # Compute the HI mass as the integrated surface density of the image
+    HImass = image.sum() * (R / resolution) ** 2
+
+    if HImass == 0.0:
+        print("Neutral gas mass is zero, not computing HI size.")
+        return 0.0, 0.0
+
     # get the limits (for plotting)
-    imax = image.max()
-    imin = max(1.0e-4 * imax, image.min())
+    imax = np.nanmax(image)
+    imin = max(1.0e-4 * imax, np.nanmin(image))
 
     # set up a grid of positions for the fit
     pixcenter = np.linspace(-R, R, resolution + 1)
@@ -125,9 +132,6 @@ def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
 
         # Compute the HI size
         HIsize = 2.0 * Dx
-
-    # Compute the HI mass as the integrated surface density of the image
-    HImass = image.sum() * (R / resolution) ** 2
 
     rcparams = {
         "font.size": 12,
@@ -223,7 +227,6 @@ def plot_HI_size_mass(output_path, name_list, all_galaxies_list):
     )
 
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
-        print(data["HI_mass"], data["HI_size"])
         pl.loglog(data["HI_mass"], data["HI_size"], "o", color=f"C{i}", label=name)
 
     pl.xlabel("M$_{\\rm{}HI}$ (M$_\\odot$)")
