@@ -11,9 +11,3 @@ plotting_number_of_galaxies: 10
 plotting_random_seed: 42
 
 orientation_method: stars_0xR0.5_R0.5_0sigma
-
-scripts:
-  - section: Test
-    caption: Test
-    output_file: HI_size_mass.png
-    title: Test

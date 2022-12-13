@@ -5,7 +5,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import unyt
-from swiftsimio import load, mask
 from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
 from swiftsimio.visualisation.projection import project_gas
 from swiftsimio.visualisation.projection import project_pixel_grid
@@ -88,55 +87,26 @@ def sci_notation(num, decimal_digits=1, precision=None, exponent=None):
 def get_stars_surface_brightness_map(
     catalogue,
     halo_id,
-    snapshot_filename,
+    data,
     size,
     npix,
     r_img_kpc,
     face_on_rotation_matrix,
     edge_on_rotation_matrix,
 ):
-    # center of the halo
-    x = catalogue.positions.xcmbp[halo_id]
-    y = catalogue.positions.ycmbp[halo_id]
-    z = catalogue.positions.zcmbp[halo_id]
 
-    # angular momentum of the stars (for projection)
-    lx = catalogue.angular_momentum.lx_star[halo_id]
-    ly = catalogue.angular_momentum.ly_star[halo_id]
-    lz = catalogue.angular_momentum.lz_star[halo_id]
-
-    angular_momentum_vector = np.array([lx.value, ly.value, lz.value])
-    angular_momentum_vector /= np.linalg.norm(angular_momentum_vector)
     # needs to be in comoving coordinates for the mask
-    region = [
-        [
-            x / catalogue.scale_factor - size / catalogue.scale_factor,
-            x / catalogue.scale_factor + size / catalogue.scale_factor,
-        ],
-        [
-            y / catalogue.scale_factor - size / catalogue.scale_factor,
-            y / catalogue.scale_factor + size / catalogue.scale_factor,
-        ],
-        [
-            z / catalogue.scale_factor - size / catalogue.scale_factor,
-            z / catalogue.scale_factor + size / catalogue.scale_factor,
-        ],
-    ]
+    visualise_region = [-0.5 * size, 0.5 * size, -0.5 * size, 0.5 * size]
 
-    visualise_region = [x - 0.5 * size, x + 0.5 * size, y - 0.5 * size, y + 0.5 * size]
-
-    data_mask = mask(snapshot_filename)
-    data_mask.constrain_spatial(region)
-    data = load(snapshot_filename, mask=data_mask)
-    data.stars.coordinates = data.stars.coordinates.to_physical()
-    data.stars.smoothing_lengths = generate_smoothing_lengths(
-        coordinates=data.stars.coordinates,
-        boxsize=data.metadata.boxsize,
-        kernel_gamma=kernel_gamma,
-        neighbours=11,
-        speedup_fac=1,
-        dimension=3,
-    )
+    if not hasattr(data.stars, "smoothing_lenghts"):
+        data.stars.smoothing_lengths = generate_smoothing_lengths(
+            coordinates=data.stars.coordinates + 0.5 * data.metadata.boxsize[None, :],
+            boxsize=data.metadata.boxsize,
+            kernel_gamma=kernel_gamma,
+            neighbours=11,
+            speedup_fac=1,
+            dimension=3,
+        )
 
     luminosities = [
         data.stars.luminosities.GAMA_i,
@@ -154,7 +124,9 @@ def get_stars_surface_brightness_map(
             project="usermass",
             parallel=True,
             region=visualise_region,
-            rotation_center=unyt.unyt_array([x, y, z]),
+            rotation_center=unyt.unyt_array(
+                [0.0, 0.0, 0.0], units=data.metadata.boxsize.units
+            ),
             rotation_matrix=face_on_rotation_matrix,
             boxsize=data.metadata.boxsize,
             backend="subsampled",
@@ -195,11 +167,13 @@ def get_stars_surface_brightness_map(
         data.stars.usermass = luminosities[ilum]
         pixel_grid = project_pixel_grid(
             data.stars,
-            resolution=int(npix),
+            resolution=npix,
             project="usermass",
             parallel=True,
             region=visualise_region,
-            rotation_center=unyt.unyt_array([x, y, z]),
+            rotation_center=unyt.unyt_array(
+                [0.0, 0.0, 0.0], units=data.metadata.boxsize.units
+            ),
             rotation_matrix=edge_on_rotation_matrix,
             boxsize=data.metadata.boxsize,
             backend="subsampled",
@@ -240,63 +214,30 @@ def get_stars_surface_brightness_map(
     mask_circle = (X - lx / 2) ** 2 + (Y - ly / 2) ** 2 > lx * ly / 4
     image_edge[mask_circle, :] = 255
 
-    return image_face, image_edge, visualise_region, x, y, -1.0, H_kpc_gri
+    return image_face, image_edge, visualise_region, 0.0, 0.0, -1.0, H_kpc_gri
 
 
 def get_stars_surface_density_map(
     catalogue,
     halo_id,
     plottype,
-    snapshot_filename,
+    data,
     size,
     npixloc,
     face_on_rotation_matrix,
     edge_on_rotation_matrix,
 ):
-    # center of the halo
-    x = catalogue.positions.xcmbp[halo_id]
-    y = catalogue.positions.ycmbp[halo_id]
-    z = catalogue.positions.zcmbp[halo_id]
+    visualise_region = [-0.5 * size, 0.5 * size, -0.5 * size, 0.5 * size]
 
-    # angular momentum of the stars (for projection)
-    lx = catalogue.angular_momentum.lx_star[halo_id]
-    ly = catalogue.angular_momentum.ly_star[halo_id]
-    lz = catalogue.angular_momentum.lz_star[halo_id]
-
-    angular_momentum_vector = np.array([lx.value, ly.value, lz.value])
-    angular_momentum_vector /= np.linalg.norm(angular_momentum_vector)
-
-    # needs to be in comoving coordinates for the mask
-    region = [
-        [
-            x / catalogue.scale_factor - size / catalogue.scale_factor,
-            x / catalogue.scale_factor + size / catalogue.scale_factor,
-        ],
-        [
-            y / catalogue.scale_factor - size / catalogue.scale_factor,
-            y / catalogue.scale_factor + size / catalogue.scale_factor,
-        ],
-        [
-            z / catalogue.scale_factor - size / catalogue.scale_factor,
-            z / catalogue.scale_factor + size / catalogue.scale_factor,
-        ],
-    ]
-
-    visualise_region = [x - 0.5 * size, x + 0.5 * size, y - 0.5 * size, y + 0.5 * size]
-
-    data_mask = mask(snapshot_filename)
-    data_mask.constrain_spatial(region)
-    data = load(snapshot_filename, mask=data_mask)
-    data.stars.coordinates = data.stars.coordinates.to_physical()
-
-    data.stars.smoothing_lengths = generate_smoothing_lengths(
-        coordinates=data.stars.coordinates,
-        boxsize=data.metadata.boxsize,
-        kernel_gamma=kernel_gamma,
-        neighbours=11,
-        speedup_fac=1,
-        dimension=3,
-    )
+    if not hasattr(data.stars, "smoothing_lenghts"):
+        data.stars.smoothing_lengths = generate_smoothing_lengths(
+            coordinates=data.stars.coordinates + 0.5 * data.metadata.boxsize[None, :],
+            boxsize=data.metadata.boxsize,
+            kernel_gamma=kernel_gamma,
+            neighbours=11,
+            speedup_fac=1,
+            dimension=3,
+        )
 
     # Face on projection
     pixel_grid = project_pixel_grid(
@@ -305,7 +246,9 @@ def get_stars_surface_density_map(
         project="masses",
         parallel=True,
         region=visualise_region,
-        rotation_center=unyt.unyt_array([x, y, z]),
+        rotation_center=unyt.unyt_array(
+            [0.0, 0.0, 0.0], units=data.metadata.boxsize.units
+        ),
         rotation_matrix=face_on_rotation_matrix,
         boxsize=data.metadata.boxsize,
         backend="subsampled",
@@ -334,7 +277,9 @@ def get_stars_surface_density_map(
         project="masses",
         parallel=True,
         region=visualise_region,
-        rotation_center=unyt.unyt_array([x, y, z]),
+        rotation_center=unyt.unyt_array(
+            [0.0, 0.0, 0.0], units=data.metadata.boxsize.units
+        ),
         rotation_matrix=edge_on_rotation_matrix,
         boxsize=data.metadata.boxsize,
         backend="subsampled",
@@ -367,63 +312,20 @@ def get_stars_surface_density_map(
     mask_circle = (X - lx / 2) ** 2 + (Y - ly / 2) ** 2 > lx * ly / 4
     mass_map_face[mask_circle] = np.nan
 
-    return mass_map_face.T, mass_map_edge.T, visualise_region, x, y, totalmass
+    return mass_map_face.T, mass_map_edge.T, visualise_region, 0.0, 0.0, totalmass
 
 
 def get_gas_surface_density_map(
     catalogue,
     halo_id,
     plottype,
-    snapshot_filename,
+    data,
     size,
     npixlocal,
     face_on_rotation_matrix,
     edge_on_rotation_matrix,
 ):
-    # center of the halo in physical coordinates
-    x = catalogue.positions.xcmbp[halo_id]
-    y = catalogue.positions.ycmbp[halo_id]
-    z = catalogue.positions.zcmbp[halo_id]
-
-    # angular momentum of the stars (for projection)
-    lx = catalogue.angular_momentum.lx_star[halo_id]
-    ly = catalogue.angular_momentum.ly_star[halo_id]
-    lz = catalogue.angular_momentum.lz_star[halo_id]
-
-    angular_momentum_vector = np.array([lx.value, ly.value, lz.value])
-    angular_momentum_vector /= np.linalg.norm(angular_momentum_vector)
-
-    # face_on_rotation_matrix = rotation_matrix_from_vector(
-    #   angular_momentum_vector
-    # )
-    # edge_on_rotation_matrix = rotation_matrix_from_vector(
-    #   angular_momentum_vector,
-    #   axis="y"
-    # )
-
-    # needs to be in comoving coordinates for the mask
-    region = [
-        [
-            x / catalogue.scale_factor - size / catalogue.scale_factor,
-            x / catalogue.scale_factor + size / catalogue.scale_factor,
-        ],
-        [
-            y / catalogue.scale_factor - size / catalogue.scale_factor,
-            y / catalogue.scale_factor + size / catalogue.scale_factor,
-        ],
-        [
-            z / catalogue.scale_factor - size / catalogue.scale_factor,
-            z / catalogue.scale_factor + size / catalogue.scale_factor,
-        ],
-    ]
-
-    visualise_region = [x - 0.5 * size, x + 0.5 * size, y - 0.5 * size, y + 0.5 * size]
-
-    data_mask = mask(snapshot_filename)
-    data_mask.constrain_spatial(region)
-    data = load(snapshot_filename, mask=data_mask)
-    data.gas.coordinates = data.gas.coordinates.to_physical()
-    data.gas.smoothing_lengths.convert_to_physical()
+    visualise_region = [-0.5 * size, 0.5 * size, -0.5 * size, 0.5 * size]
 
     if plottype == "HI":
         data.gas.usermass = (
@@ -469,7 +371,9 @@ def get_gas_surface_density_map(
         project="usermass",
         parallel=True,
         region=visualise_region,
-        rotation_center=unyt.unyt_array([x, y, z]),
+        rotation_center=unyt.unyt_array(
+            [0.0, 0.0, 0.0], units=data.metadata.boxsize.units
+        ),
         rotation_matrix=face_on_rotation_matrix,
         backend="subsampled",
     )
@@ -493,7 +397,9 @@ def get_gas_surface_density_map(
         project="usermass",
         parallel=True,
         region=visualise_region,
-        rotation_center=unyt.unyt_array([x, y, z]),
+        rotation_center=unyt.unyt_array(
+            [0.0, 0.0, 0.0], units=data.metadata.boxsize.units
+        ),
         rotation_matrix=edge_on_rotation_matrix,
         backend="subsampled",
     )
@@ -515,7 +421,7 @@ def get_gas_surface_density_map(
     mask_circle = (X - lx / 2) ** 2 + (Y - ly / 2) ** 2 > lx * ly / 4
     mass_map_face[mask_circle] = np.nan
 
-    return mass_map_face.T, mass_map_edge.T, visualise_region, x, y, totalmass
+    return mass_map_face.T, mass_map_edge.T, visualise_region, 0.0, 0.0, totalmass
 
 
 def get_radial_profile(mass_map, radialbin_kpc, pixsize_kpc, r_img_kpc):
@@ -561,7 +467,7 @@ def plot_galaxy(
     catalogue,
     halo_id,
     index,
-    snapshot_filename,
+    data,
     face_on_rotation_matrix,
     edge_on_rotation_matrix,
     output_path,
@@ -655,7 +561,7 @@ def plot_galaxy(
     ) = get_stars_surface_brightness_map(
         catalogue,
         halo_id,
-        snapshot_filename,
+        data,
         size,
         npix,
         r_img_kpc,
@@ -733,7 +639,7 @@ def plot_galaxy(
         catalogue,
         halo_id,
         "HI",
-        snapshot_filename,
+        data,
         size,
         npix,
         face_on_rotation_matrix,
@@ -809,7 +715,7 @@ def plot_galaxy(
         catalogue,
         halo_id,
         "H2",
-        snapshot_filename,
+        data,
         size,
         npix,
         face_on_rotation_matrix,
@@ -917,7 +823,7 @@ def plot_galaxy(
                 catalogue,
                 halo_id,
                 "hydrogen",
-                snapshot_filename,
+                data,
                 size,
                 npix,
                 face_on_rotation_matrix,
@@ -934,7 +840,7 @@ def plot_galaxy(
                 catalogue,
                 halo_id,
                 "diffuseoxygen",
-                snapshot_filename,
+                data,
                 size,
                 npix,
                 face_on_rotation_matrix,
@@ -951,7 +857,7 @@ def plot_galaxy(
                 catalogue,
                 halo_id,
                 "stars",
-                snapshot_filename,
+                data,
                 size,
                 npix,
                 face_on_rotation_matrix,

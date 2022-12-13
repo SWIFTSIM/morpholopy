@@ -252,5 +252,15 @@ def plot_HI_size_mass(output_path, name_list, all_galaxies_list):
     pl.legend(loc="best")
 
     pl.tight_layout()
-    pl.savefig(f"{output_path}/HI_size_mass.png", dpi=200)
+    outputname = "HI_size_mass.png"
+    pl.savefig(f"{output_path}/{outputname}", dpi=200)
     pl.close()
+
+    return {
+        "HI sizes": {
+            outputname: {
+                "title": "HI size - HI mass",
+                "caption": "HI size versus HI mass relation.",
+            }
+        }
+    }

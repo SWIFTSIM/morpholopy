@@ -265,7 +265,7 @@ if __name__ == "__main__":
             # add galaxy contribution to global data
             all_galaxies[index] = galaxy_data
             if images is not None:
-                all_images[f"Galaxy {index}"] = images
+                all_images[f"ZZZ - Galaxy {index}"] = images
 
         # save plot data using the given metadata name
         metadata_filename = (
@@ -290,7 +290,7 @@ if __name__ == "__main__":
     if not os.path.exists(args.output):
         os.mkdir(args.output)
 
-    plot_HI_size_mass(args.output, run_names, all_galaxies_list)
+    all_images.update(plot_HI_size_mass(args.output, run_names, all_galaxies_list))
 
     print(all_images)
     config.add_images(all_images)

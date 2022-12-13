@@ -431,7 +431,7 @@ def process_galaxy(args):
             catalogue,
             galaxy_index,
             index,
-            snapshot_filename,
+            data,
             face_on_rmatrix,
             edge_on_rmatrix,
             output_path,
