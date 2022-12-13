@@ -7,13 +7,7 @@ from velociraptor.swift.swift import to_swiftsimio_dataset
 import unyt
 import yaml
 
-from .morphology import (
-    calculate_morphology,
-    get_angular_momentum_vector,
-    get_axis_lengths,
-    get_new_axis_lengths,
-    get_kappa_corot,
-)
+from .morphology import get_new_axis_lengths, get_kappa_corot
 from .orientation import get_orientation_matrices
 from .KS import (
     calculate_integrated_surface_densities,
@@ -22,23 +16,26 @@ from .KS import (
 )
 from .HI_size import calculate_HI_size
 from .medians import accumulate_median_data, compute_median
+from .galaxy_plots import plot_galaxy
 
 from functools import reduce
 
 data_fields = [
     ("stellar_mass", np.float32),
     ("half_mass_radius_star", np.float32),
-    ("kappa_co", np.float32),
-    ("momentum", (np.float32, 3)),
-    ("axis_ca", np.float32),
-    ("axis_cb", np.float32),
-    ("axis_ba", np.float32),
-    ("z_axis", (np.float32, 3)),
+    ("stars_kappa_co", np.float32),
+    ("stars_momentum", (np.float32, 3)),
+    ("orientation_vector", (np.float32, 3)),
+    ("stars_axis_ca", np.float32),
+    ("stars_axis_cb", np.float32),
+    ("stars_axis_ba", np.float32),
+    ("stars_z_axis", (np.float32, 3)),
     ("gas_kappa_co", np.float32),
     ("gas_momentum", np.float32),
     ("gas_axis_ca", np.float32),
     ("gas_axis_cb", np.float32),
     ("gas_axis_ba", np.float32),
+    ("gas_z_axis", np.float32),
     ("sigma_H2", np.float32),
     ("sigma_gas", np.float32),
     ("sigma_SFR", np.float32),
@@ -127,11 +124,11 @@ class GalaxyData:
 class AllGalaxyData:
     output_order = [
         "stellar_mass",
-        "momentum",
-        "kappa_co",
-        "axis_ca",
-        "axis_cb",
-        "axis_ba",
+        "stars_momentum",
+        "stars_kappa_co",
+        "stars_axis_ca",
+        "stars_axis_cb",
+        "stars_axis_ba",
         "gas_momentum",
         "gas_kappa_co",
         "gas_axis_ca",
@@ -193,11 +190,14 @@ class AllGalaxyData:
 
 def process_galaxy(args):
 
-    index, galaxy_index, catalogue_filename, snapshot_filename, orientation_type = args
+    index, galaxy_index, catalogue_filename, snapshot_filename, output_path, orientation_type, make_plots = (
+        args
+    )
 
     galaxy_data = GalaxyData()
 
-    catalogue = load_catalogue(catalogue_filename)
+    # we need to disregard the units to avoid problems with the SFR unit
+    catalogue = load_catalogue(catalogue_filename, disregard_units=True)
     groups = load_groups(
         catalogue_filename.replace(".properties", ".catalog_groups"),
         catalogue=catalogue,
@@ -349,6 +349,9 @@ def process_galaxy(args):
     data.gas.star_formation_rates.convert_to_physical()
     data.gas.H_neutral_mass = data.gas.HI_mass + data.gas.H2_mass
 
+    # convert to the galaxy frame: subtract the galaxy centre position and
+    # velocity from the particle coordinates and velocities
+    # do not forget about the periodic boundary!
     data.gas.coordinates.convert_to_physical()
     data.gas.coordinates[:, :] -= galaxy_center[None, :]
     data.gas.coordinates[:, :] += 0.5 * box[None, :]
@@ -359,6 +362,7 @@ def process_galaxy(args):
     data.gas.velocities[:, :] -= galaxy_velocity[None, :]
     gas_radius = unyt.array.unorm(data.gas.coordinates[:, :], axis=1)
     gas_mask = gas_radius < 30.0 * unyt.kpc
+    data.gas.smoothing_lengths.convert_to_physical()
 
     data.stars.coordinates.convert_to_physical()
     data.stars.coordinates[:, :] -= galaxy_center[None, :]
@@ -372,47 +376,24 @@ def process_galaxy(args):
 
     # determine the angular momentum vector and corresponding face-on and
     # edge-on rotation matrices
-    """
-    face_on_rmatrix, edge_on_rmatrix = get_angular_momentum_vector(
-        stars_coordinates, stars_velocities, stars_mass, galaxy_center, galaxy_velocity
-    )
-    """
     orientation_vector, face_on_rmatrix, edge_on_rmatrix = get_orientation_matrices(
         data, Rhalf, R200crit, Rvir, orientation_type
     )
 
-    """
-    galaxy_data[
-        ["kappa_co", "momentum", "axis_ca", "axis_cb", "axis_ba"]
-    ] = calculate_morphology(
-        stars_coordinates,
-        stars_velocities,
-        stars_mass,
-        box,
-        galaxy_center,
-        galaxy_velocity,
-    )
-    galaxy_data[
-        ["gas_kappa_co", "gas_momentum", "gas_axis_ca", "gas_axis_cb", "gas_axis_ba"]
-    ] = calculate_morphology(
-        gas_coordinates, gas_velocities, gas_mass, box, galaxy_center, galaxy_velocity
-    )
-    a, b, c = get_axis_lengths(data.stars, Rhalf, R200crit, orientation_type)
-    """
     (a, b, c), z_axis = get_new_axis_lengths(
         data, Rhalf, R200crit, Rvir, orientation_type
     )
-    kappa_corot = get_kappa_corot(
+    stars_momentum, kappa_corot = get_kappa_corot(
         data.stars, Rhalf, R200crit, Rvir, orientation_type, orientation_vector
     )
-    galaxy_data["axis_ca"] = c / a
-    galaxy_data["axis_cb"] = c / b
-    galaxy_data["axis_ba"] = b / a
-    galaxy_data["z_axis"] = z_axis
-    galaxy_data["kappa_co"] = kappa_corot
-    galaxy_data["momentum"] = orientation_vector
+    galaxy_data["stars_axis_ca"] = c / a
+    galaxy_data["stars_axis_cb"] = c / b
+    galaxy_data["stars_axis_ba"] = b / a
+    galaxy_data["stars_z_axis"] = z_axis
+    galaxy_data["stars_kappa_co"] = kappa_corot
+    galaxy_data["orientation_vector"] = orientation_vector
+    galaxy_data["stars_momentum"] = stars_momentum
 
-    """
     galaxy_data[
         ["sigma_H2", "sigma_gas", "sigma_SFR"]
     ] = calculate_integrated_surface_densities(
@@ -444,6 +425,16 @@ def process_galaxy(args):
     galaxy_data[["HI_size", "HI_mass"]] = calculate_HI_size(
         data, face_on_rmatrix, gas_mask, index
     )
-    """
+
+    if make_plots:
+        plot_galaxy(
+            catalogue,
+            galaxy_index,
+            index,
+            snapshot_filename,
+            face_on_rmatrix,
+            edge_on_rmatrix,
+            output_path,
+        )
 
     return index, galaxy_data

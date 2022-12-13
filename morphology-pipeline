@@ -11,6 +11,7 @@ ADD MORE DESCRIPTION HERE
 
 import argparse as ap
 import multiprocessing as mp
+import os
 
 parser = ap.ArgumentParser(
     prog="morphology-pipeline",
@@ -117,40 +118,24 @@ parser.add_argument(
     ),
 )
 
-parser.add_argument(
-    "-M",
-    "--mass-limit",
-    required=True,
-    type=float,
-    help=(
-        "Mass limit (in Msun) above which galaxies are included in morphological plots."
-    ),
-)
 
-parser.add_argument(
-    "-O",
-    "--orientation",
-    type=str,
-    default="stars_0xR0.5_R0.5_0sigma",
-    help=(
-        "String describing the way the orientation vector for face-on and edge-on "
-        "projections is constructed. This string consists of 3 parts. The first "
-        "part describes the galaxy component that is used (stars, gas, ISM gas, "
-        "HI gas, baryons), the second part describes the aperture radius (1x, "
-        "2x, 4x the stellar half mass radius within 50 kpc, a fixed 50 kpc "
-        "aperture or R200 crit). The final part describes the sigma clipping "
-        "in velocity space (0 - no clipping -, 1 or 2 sigma)."
-    ),
-)
+def init_child_process(env, temp_folder):
+    """
+    Matplotlib with LaTeX support is not safe to use in parallel.
+    The reason is that Matplotlib saves some intermediary files in a temporary
+    directory (MPLCONFIGDIR environment variable) in order to post-process
+    figures that use LaTeX. All these temporary files end up in the same
+    directory and apparently can have the same names when you run multiple
+    Python processes that try to save a figure at the same time.
+    The only way around this is to use a different temporary directory for each
+    subprocess, which is what this function does: it is run exactly once when
+    the subprocess is created and sets the MPLCONFIGDIR environment variable
+    for this subprocess to a unique value.
+    """
+    print(mp.current_process().pid, "starting...")
+    env["MPLCONFIGDIR"] = f"{temp_folder}/temp_folder_pid_{mp.current_process().pid}"
+    os.environ = env
 
-# Not sure if this is still relevant...
-parser.add_argument(
-    "-g",
-    "--num-of-galaxies",
-    required=True,
-    type=int,
-    help=("Number of galaxies for which individual plots are made."),
-)
 
 if __name__ == "__main__":
 
@@ -162,7 +147,7 @@ if __name__ == "__main__":
 
     from morpholopy.HI_size import plot_HI_size_mass
 
-    from swiftpipeline.config import Config
+    from morpholopy.config import MorphologyConfig
     from swiftpipeline.html import WebpageCreator
 
     import matplotlib
@@ -172,14 +157,21 @@ if __name__ == "__main__":
 
     import unyt
     import os
+    import tempfile
+    import shutil
 
     # minimise the memory footprint of parallel processes by ensuring only
     # relevant data in memory are copied
     mp.set_start_method("forkserver")
 
+    # create a temporary directory for the per subprocess Matplotlib cache
+    # directories
+    tmpdir = tempfile.mkdtemp()
+    print(f"Will save temporary files in {tmpdir}")
+
     args = parser.parse_args()
 
-    config = Config(config_directory=args.config)
+    config = MorphologyConfig(config_directory=args.config)
 
     if config.matplotlib_stylesheet != "default":
         stylesheet_path = f"{config.config_directory}/{config.matplotlib_stylesheet}"
@@ -221,7 +213,17 @@ if __name__ == "__main__":
         snapshot_filename = f"{args.input[0]}/{args.snapshots[0]}"
 
         catalogue = load_catalogue(halo_catalogue_filename, disregard_units=True)
-        filtered_catalogue = FilteredCatalogue(catalogue, args.mass_limit * unyt.Msun)
+        filtered_catalogue = FilteredCatalogue(
+            catalogue,
+            config.mass_limit_stars_in_Msun,
+            config.mass_variable_stars,
+            config.mass_limit_gas_in_Msun,
+            config.mass_variable_gas,
+            config.plotting_lower_mass_limit_in_Msun,
+            config.plotting_upper_mass_limit_in_Msun,
+            config.plotting_number_of_galaxies,
+            config.plotting_random_seed,
+        )
         # close the catalogue by unloading it explicitly
         catalogue = None
 
@@ -236,9 +238,13 @@ if __name__ == "__main__":
                 galaxy_index,
                 halo_catalogue_filename,
                 snapshot_filename,
-                args.orientation,
+                args.output,
+                config.orientation_method,
+                make_plots,
             )
-            for index, galaxy_index in enumerate(filtered_catalogue.galaxy_indices)
+            for index, (galaxy_index, make_plots) in enumerate(
+                zip(filtered_catalogue.galaxy_indices, filtered_catalogue.plot_galaxy)
+            )
         ]
 
         # determine the appropriate number of parallel processes to use
@@ -251,7 +257,10 @@ if __name__ == "__main__":
         # serial version (has better crash reports)
         for index, galaxy_data in map(process_galaxy, arglist):
         """
-        pool = mp.Pool(num_proc)
+        parent_env = os.environ.copy()
+        pool = mp.Pool(
+            num_proc, initializer=init_child_process, initargs=(parent_env, tmpdir)
+        )
         for index, galaxy_data in pool.imap_unordered(process_galaxy, arglist):
             # add galaxy contribution to global data
             all_galaxies[index] = galaxy_data
@@ -288,3 +297,7 @@ if __name__ == "__main__":
     webpage.add_run_metadata(config=config, snapshots=snapshots)
     webpage.render_webpage()
     webpage.save_html(f"{args.output}/index.html")
+
+    # Remove the temporary directory hosting the Matplotlib caches
+    print(f"Removing temporary directory {tmpdir}")
+    shutil.rmtree(tmpdir)
