@@ -145,6 +145,7 @@ if __name__ == "__main__":
     from morpholopy.galaxy_data import process_galaxy, AllGalaxyData
 
     from morpholopy.HI_size import plot_HI_size_mass
+    from morpholopy.morphology import plot_morphology
 
     from morpholopy.config import MorphologyConfig
     from swiftpipeline.html import WebpageCreator
@@ -207,6 +208,7 @@ if __name__ == "__main__":
     is_comparison = len(args.snapshots) > 1
 
     all_galaxies_list = []
+    all_images = {}
     if not is_comparison:
         halo_catalogue_filename = f"{args.input[0]}/{args.catalogues[0]}"
         snapshot_filename = f"{args.input[0]}/{args.snapshots[0]}"
@@ -260,12 +262,15 @@ if __name__ == "__main__":
         pool = mp.Pool(
             num_proc, initializer=init_child_process, initargs=(parent_env, tmpdir)
         )
-        all_images = {}
         for index, galaxy_data, images in pool.imap_unordered(process_galaxy, arglist):
+            print(f"Finished processing galaxy {index}")
             # add galaxy contribution to global data
             all_galaxies[index] = galaxy_data
             if images is not None:
+                print(f"Adding figures for galaxy {index}")
                 all_images[f"ZZZ - Galaxy {index}"] = images
+        pool.close()
+        pool.join()
 
         # save plot data using the given metadata name
         metadata_filename = (
@@ -291,8 +296,8 @@ if __name__ == "__main__":
         os.mkdir(args.output)
 
     all_images.update(plot_HI_size_mass(args.output, run_names, all_galaxies_list))
+    all_images.update(plot_morphology(args.output, run_names, all_galaxies_list))
 
-    print(all_images)
     config.add_images(all_images)
 
     # Create the webpage

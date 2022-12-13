@@ -24,7 +24,7 @@ data_fields = [
     ("stellar_mass", np.float32),
     ("half_mass_radius_star", np.float32),
     ("stars_kappa_co", np.float32),
-    ("stars_momentum", (np.float32, 3)),
+    ("stars_momentum", np.float32),
     ("orientation_vector", (np.float32, 3)),
     ("stars_axis_ca", np.float32),
     ("stars_axis_cb", np.float32),
@@ -161,6 +161,9 @@ class AllGalaxyData:
     def __getitem__(self, key):
         return self.data[key]
 
+    def __str__(self):
+        return f"Galaxy data object containing the following variables: {list(self.data.dtype.fields)}."
+
     def __setitem__(self, index, galaxy_data):
         self.data[index] = galaxy_data.data[0]
         if self.median_data is None:
@@ -225,52 +228,6 @@ def process_galaxy(args):
             else:
                 vals = dataset[partmask].to_physical()
                 setattr(group, field, vals)
-
-    # read relevant gas data
-    gas_coordinates = data.gas.coordinates.to_physical()
-    gas_mass = data.gas.masses.to_physical()
-    gas_velocities = data.gas.velocities.to_physical()
-    gas_hsml = data.gas.smoothing_lengths.to_physical()
-    gas_HI = (
-        data.gas.species_fractions.HI
-        * data.gas.element_mass_fractions.hydrogen
-        * gas_mass
-    )
-    gas_H2 = (
-        2.0
-        * data.gas.species_fractions.H2
-        * data.gas.element_mass_fractions.hydrogen
-        * gas_mass
-    )
-    gas_sfr = data.gas.star_formation_rates.to_physical()
-    gas_rho = data.gas.densities.to_physical()
-    gas_Z = data.gas.metal_mass_fractions / 0.0134
-    gas_temp = data.gas.temperatures
-
-    # read relevant stars data
-    stars_coordinates = data.stars.coordinates.to_physical()
-    stars_mass = data.stars.masses.to_physical()
-    stars_velocities = data.stars.velocities.to_physical()
-    stars_hsml = (
-        0.5
-        * np.ones(stars_mass.shape)
-        * data.metadata.gravity_scheme[
-            "Maximal physical baryon softening length  [internal units]"
-        ][0]
-        * data.metadata.units.length
-        * data.metadata.a
-    )
-    stars_birthz = 1.0 / data.stars.birth_scale_factors - 1.0
-    # get age by using cosmology
-    stars_age = (
-        data.metadata.cosmology.age(data.metadata.z).value
-        - np.array(
-            [data.metadata.cosmology.age(birthz.value).value for birthz in stars_birthz]
-        )
-    ) * unyt.Gyr
-    stars_Z = data.stars.metal_mass_fractions
-    stars_init_mass = data.stars.initial_masses.to_physical()
-    stars_density = stars_mass * (1.2348 / stars_hsml) ** 3
 
     # get some properties from the catalogue
     galaxy_center = cosmo_array(
@@ -393,6 +350,16 @@ def process_galaxy(args):
     galaxy_data["stars_kappa_co"] = kappa_corot
     galaxy_data["orientation_vector"] = orientation_vector
     galaxy_data["stars_momentum"] = stars_momentum
+
+    galaxy_data[["gas_momentum", "gas_kappa_co"]] = get_kappa_corot(
+        data.gas,
+        Rhalf,
+        R200crit,
+        Rvir,
+        orientation_type,
+        orientation_vector,
+        mass_variable="H_neutral_mass",
+    )
 
     galaxy_data[
         ["sigma_H2", "sigma_gas", "sigma_SFR"]

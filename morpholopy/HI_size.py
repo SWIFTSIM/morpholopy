@@ -206,26 +206,6 @@ def plot_HI_size_mass(output_path, name_list, all_galaxies_list):
     fit_intercept_sigma_low = 0.074
     fit_intercept_sigma_high = 0.073
 
-    params = {
-        "font.size": 12,
-        "font.family": "Times",
-        "text.usetex": True,
-        "figure.figsize": (5.5, 4),
-        "figure.subplot.left": 0.05,
-        "figure.subplot.right": 0.95,
-        "figure.subplot.bottom": 0.15,
-        "figure.subplot.top": 0.9,
-        "figure.subplot.wspace": 0.3,
-        "figure.subplot.hspace": 0.3,
-        "lines.markersize": 4,
-        "lines.linewidth": 2.0,
-        "xtick.top": True,
-        "xtick.labeltop": True,
-        "ytick.right": True,
-        "ytick.labelright": True,
-    }
-    pl.rcParams.update(params)
-
     logMfit = np.array([6.5, 12.0])
     pl.fill_between(
         10.0 ** logMfit,

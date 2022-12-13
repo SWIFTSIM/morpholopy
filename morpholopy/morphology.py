@@ -7,6 +7,10 @@ from .orientation import (
     get_mass_position_velocity_nomask,
     get_orientation_mask_radius,
 )
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as pl
 
 
 def get_new_axis_lengths(data, half_mass_radius, R200crit, Rvir, orientation_type):
@@ -126,14 +130,20 @@ def get_new_axis_lengths(data, half_mass_radius, R200crit, Rvir, orientation_typ
 
 
 def get_kappa_corot(
-    partdata, half_mass_radius, R200crit, Rvir, orientation_type, orientation_vector
+    partdata,
+    half_mass_radius,
+    R200crit,
+    Rvir,
+    orientation_type,
+    orientation_vector,
+    mass_variable="masses",
 ):
 
     _, inner_aperture, outer_aperture, clipping = orientation_type.split("_")
 
     position = partdata.coordinates
     velocity = partdata.velocities
-    mass = partdata.masses
+    mass = getattr(partdata, mass_variable)
 
     radius = np.sqrt((position ** 2).sum(axis=1))
     mask = get_orientation_mask(
@@ -159,4 +169,144 @@ def get_kappa_corot(
     mask = (Lz > 0.0) & (R2 > 0.0)
     Kcorot = 0.5 * (Lz[mask] ** 2 / (mass[mask] * R2[mask])).sum()
 
-    return angular_momentum.sum(axis=0), Kcorot / K
+    j = angular_momentum.sum(axis=0) / mass.sum()
+    j.convert_to_units("kpc*km/s")
+    j = np.sqrt((j ** 2).sum())
+
+    return j, Kcorot / K
+
+
+def plot_morphology(output_path, name_list, all_galaxies_list):
+
+    plots = {}
+
+    fig_gas, ax_gas = pl.subplots(1, 1)
+    fig_star, ax_star = pl.subplots(1, 1)
+
+    for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        Mstar = unyt.unyt_array(data["stellar_mass"], unyt.Msun).in_base("galactic")
+        Mstar.name = "Stellar Mass"
+        jstar = unyt.unyt_array(data["stars_momentum"], unyt.kpc * unyt.km / unyt.s)
+        jstar.name = "Stellar Specific Angular Momentum"
+        jgas = unyt.unyt_array(data["gas_momentum"], unyt.kpc * unyt.km / unyt.s)
+        jgas.name = "Gas Specific Angular Momentum"
+
+        with unyt.matplotlib_support:
+            ax_star.loglog(Mstar, jstar, ".", label=name)
+            ax_gas.loglog(Mstar, jgas, ".", label=name)
+
+    ax_star.set_title("Stellar component")
+    ax_gas.set_title("HI+H2 gas")
+    for ax in [ax_gas, ax_star]:
+        ax.grid(True)
+        ax.set_xlim(1.0e6, 1.0e12)
+        ax.set_ylim(0.1, 1.0e4)
+        ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
+        ax.legend(loc="best")
+
+    jgas_filename = "specific_angular_momentum_gas.png"
+    fig_gas.savefig(f"{output_path}/{jgas_filename}", dpi=300)
+    pl.close(fig_gas)
+
+    jstar_filename = "specific_angular_momentum_stars.png"
+    fig_star.savefig(f"{output_path}/{jstar_filename}", dpi=300)
+    pl.close(fig_star)
+
+    plots["Specific angular momentum"] = {
+        jstar_filename: {
+            "title": "Specific angular momentum / Stars",
+            "caption": "Ratio between the total angular momentum of stars within 30 kpc of aperture divided by the total mass in stars.",
+        },
+        jgas_filename: {
+            "title": "Specific angular momentum / HI+H2 gas",
+            "caption": "Ratio between the total angular momentum of gas within 30 kpc of aperture divided by the total mass in gas.",
+        },
+    }
+
+    fig_gas, ax_gas = pl.subplots(1, 1)
+    fig_star, ax_star = pl.subplots(1, 1)
+
+    for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        Mstar = unyt.unyt_array(data["stellar_mass"], unyt.Msun).in_base("galactic")
+        Mstar.name = "Stellar Mass"
+        kappa_star = unyt.unyt_array(data["stars_kappa_co"], unyt.dimensionless)
+        kappa_star.name = "Stellar Kappa Corot"
+        kappa_gas = unyt.unyt_array(data["gas_kappa_co"], unyt.dimensionless)
+        kappa_gas.name = "Gas Kappa Corot"
+
+        with unyt.matplotlib_support:
+            ax_star.semilogx(Mstar, kappa_star, ".", label=name)
+            ax_gas.semilogx(Mstar, kappa_gas, ".", label=name)
+
+    ax_star.set_title("Stellar component")
+    ax_gas.set_title("HI+H2 gas")
+    for ax in [ax_gas, ax_star]:
+        ax.grid(True)
+        ax.set_xlim(1.0e6, 1.0e12)
+        ax.set_ylim(0.0, 1.0)
+        ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
+        ax.legend(loc="best")
+
+    kappa_gas_filename = "kappa_corot_gas.png"
+    fig_gas.savefig(f"{output_path}/{kappa_gas_filename}", dpi=300)
+    pl.close(fig_gas)
+
+    kappa_star_filename = "kappa_corot_stars.png"
+    fig_star.savefig(f"{output_path}/{kappa_star_filename}", dpi=300)
+    pl.close(fig_star)
+
+    plots["Kappa corotation"] = {
+        kappa_star_filename: {
+            "title": "Kappa corotation / Stars",
+            "caption": "Kappa corotation is defined as the fraction of kinetic energy in a galaxy that is in ordered rotation. Note that the rotating contribution is calculated only for prograde rotation.",
+        },
+        kappa_gas_filename: {
+            "title": "Kappa corotation / HI+H2 gas",
+            "caption": "Kappa corotation is defined as the fraction of kinetic energy in a galaxy that is in ordered rotation. Note that the rotating contribution is calculated only for prograde rotation.",
+        },
+    }
+
+    fig_gas, ax_gas = pl.subplots(1, 3, figsize=(11, 3.5))
+    fig_star, ax_star = pl.subplots(1, 3, figsize=(11, 3.5))
+
+    for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        Mstar = unyt.unyt_array(data["stellar_mass"], unyt.Msun).in_base("galactic")
+        Mstar.name = "Stellar Mass"
+        for j, (dname, dlabel) in enumerate(
+            [("axis_ca", "c/a"), ("axis_cb", "c/b"), ("axis_ba", "b/a")]
+        ):
+            ratio_star = unyt.unyt_array(data[f"stars_{dname}"], unyt.dimensionless)
+            ratio_star.name = f"Stellar {dlabel}"
+            ratio_gas = unyt.unyt_array(data[f"gas_{dname}"], unyt.dimensionless)
+            ratio_gas.name = f"Gas {dlabel}"
+
+            with unyt.matplotlib_support:
+                ax_star[j].semilogx(Mstar, ratio_star, ".", label=name)
+                ax_gas[j].semilogx(Mstar, ratio_gas, ".", label=name)
+
+    ax_star[1].set_title("Stellar component")
+    ax_gas[1].set_title("HI+H2 gas")
+    for ax in [*ax_gas, *ax_star]:
+        ax.grid(True)
+        ax.set_xlim(1.0e6, 1.0e12)
+        ax.set_ylim(0.0, 1.0)
+        ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
+        ax.legend(loc="best")
+
+    ratio_gas_filename = "axis_ratios_gas.png"
+    fig_gas.savefig(f"{output_path}/{ratio_gas_filename}", dpi=300)
+    pl.close(fig_gas)
+
+    ratio_star_filename = "axis_ratios_stars.png"
+    fig_star.savefig(f"{output_path}/{ratio_star_filename}", dpi=300)
+    pl.close(fig_star)
+
+    plots["Axis ratios"] = {
+        ratio_star_filename: {"title": "Axis ratios / Stars", "caption": "TO BE ADDED"},
+        ratio_gas_filename: {
+            "title": "Axis ratios / HI+H2 gas",
+            "caption": "TO BE ADDED",
+        },
+    }
+
+    return plots

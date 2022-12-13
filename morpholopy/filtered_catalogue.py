@@ -43,4 +43,4 @@ class FilteredCatalogue:
                 self.plot_galaxy[plot_selection] = True
             else:
                 # all galaxies in the range can be plotted
-                self.plot_galaxy[:] = True
+                self.plot_galaxy[plot_mask] = True
