@@ -132,7 +132,6 @@ def init_child_process(env, temp_folder):
     the subprocess is created and sets the MPLCONFIGDIR environment variable
     for this subprocess to a unique value.
     """
-    print(mp.current_process().pid, "starting...")
     env["MPLCONFIGDIR"] = f"{temp_folder}/temp_folder_pid_{mp.current_process().pid}"
     os.environ = env
 
@@ -261,9 +260,12 @@ if __name__ == "__main__":
         pool = mp.Pool(
             num_proc, initializer=init_child_process, initargs=(parent_env, tmpdir)
         )
-        for index, galaxy_data in pool.imap_unordered(process_galaxy, arglist):
+        all_images = {}
+        for index, galaxy_data, images in pool.imap_unordered(process_galaxy, arglist):
             # add galaxy contribution to global data
             all_galaxies[index] = galaxy_data
+            if images is not None:
+                all_images[f"Galaxy {index}"] = images
 
         # save plot data using the given metadata name
         metadata_filename = (
@@ -289,6 +291,9 @@ if __name__ == "__main__":
         os.mkdir(args.output)
 
     plot_HI_size_mass(args.output, run_names, all_galaxies_list)
+
+    print(all_images)
+    config.add_images(all_images)
 
     # Create the webpage
     webpage = WebpageCreator()

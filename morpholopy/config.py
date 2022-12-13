@@ -1,5 +1,5 @@
 import numpy as np
-from swiftpipeline.config import Config
+from swiftpipeline.config import Config, Script
 import unyt
 
 direct_read = {
@@ -35,3 +35,11 @@ class MorphologyConfig(Config):
             if unit is not None:
                 val = unyt.unyt_quantity(val, unit).in_base("galactic")
             setattr(self, variable, val)
+
+    def add_images(self, images):
+        for section in images:
+            for img in images[section]:
+                script_dict = images[section][img]
+                script_dict["output_file"] = img
+                script_dict["section"] = section
+                self.raw_scripts.append(Script(script_dict=script_dict))

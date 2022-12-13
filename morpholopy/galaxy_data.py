@@ -427,7 +427,7 @@ def process_galaxy(args):
     )
 
     if make_plots:
-        plot_galaxy(
+        images = plot_galaxy(
             catalogue,
             galaxy_index,
             index,
@@ -436,5 +436,7 @@ def process_galaxy(args):
             edge_on_rmatrix,
             output_path,
         )
+    else:
+        images = None
 
-    return index, galaxy_data
+    return index, galaxy_data, images

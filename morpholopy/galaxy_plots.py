@@ -227,7 +227,6 @@ def get_stars_surface_brightness_map(
             H_kpc_gri[ilum] = -1.0
         rgb_image_edge[:, :, ilum] = mass_map_edge.T
 
-    print("H (gri): ", H_kpc_gri)
     image_edge = make_lupton_rgb(
         rgb_image_edge[:, :, 0],
         rgb_image_edge[:, :, 1],
@@ -458,10 +457,7 @@ def get_gas_surface_density_map(
         data.gas.star_formation_rates[data.gas.star_formation_rates < 0.0] = 0.0
         data.gas.usermass = data.gas.star_formation_rates
     else:
-        print("Unknown plottype: ", plottype)
-        import sys
-
-        sys.exit()
+        raise RuntimeError(f"Unknown plot type: {plottype}!")
 
     if not "sfr" in plottype:
         data.gas.usermass.convert_to_units("Msun")
@@ -570,7 +566,6 @@ def plot_galaxy(
     edge_on_rotation_matrix,
     output_path,
 ):
-    print(matplotlib.get_cachedir())
 
     fig = plt.figure(figsize=(15.0, 3.5))
     fig.subplots_adjust(left=0.01, right=0.95, top=0.85, bottom=0.12)
@@ -623,7 +618,6 @@ def plot_galaxy(
         catalogue.apertures.sfr_gas_100_kpc[halo_id]
         / catalogue.apertures.mass_star_100_kpc[halo_id]
     )
-    print(halo_id, sSFR)
     if np.isfinite(sSFR):
         text += (
             r"sSFR$_{\mathrm{100}}$ = "
@@ -1022,7 +1016,10 @@ def plot_galaxy(
         fontsize=8,
     )
 
-    outputname = f"{output_path}/surface_overview_halo{index:03d}.png"
-    print(outputname)
-    fig.savefig(outputname, dpi=150)
+    outputname = f"surface_overview_halo{index:03d}.png"
+    fig.savefig(f"{output_path}/{outputname}", dpi=150)
     plt.close()
+
+    return {
+        outputname: {"caption": "Surface density plots", "title": "Surface densities"}
+    }
