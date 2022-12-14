@@ -205,6 +205,9 @@ if __name__ == "__main__":
     )
     print(f"Observational data path: {observational_data_path}")
 
+    if not os.path.exists(args.output):
+        os.mkdir(args.output)
+
     is_comparison = len(args.snapshots) > 1
 
     all_galaxies_list = []
@@ -299,9 +302,6 @@ if __name__ == "__main__":
         all_galaxies_list = [
             AllGalaxyData.fromfile(filename) for filename in metadata_filenames
         ]
-
-    if not os.path.exists(args.output):
-        os.mkdir(args.output)
 
     all_images.update(
         plot_HI_size_mass(
