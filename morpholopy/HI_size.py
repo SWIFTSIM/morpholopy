@@ -101,9 +101,13 @@ def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
     b = 0.0
     c = 0.5 / sigY ** 2
     # perform the fit
-    params, _ = opt.curve_fit(
-        gauss_curve, xs, image.flatten(), p0=(A, a, b, c, 0.0, 0.0)
-    )
+    try:
+        params, _ = opt.curve_fit(
+            gauss_curve, xs, image.flatten(), p0=(A, a, b, c, 0.0, 0.0)
+        )
+    except RuntimeError:
+        print("Unable to fit HI profile. Will not compute HI size.")
+        return 0.0, 0.0
 
     # extract the fitted parameters
     A, a, b, c, x0, y0 = params
