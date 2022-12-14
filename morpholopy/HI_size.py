@@ -7,6 +7,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as pl
 
+make_plots = False
+
 
 def gauss_curve(x, A, a, b, c, x0, y0):
     """
@@ -133,77 +135,80 @@ def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
         # Compute the HI size
         HIsize = 2.0 * Dx
 
-    rcparams = {
-        "font.size": 12,
-        "font.family": "Times",
-        "text.usetex": True,
-        "figure.figsize": (5.5, 4),
-        "figure.subplot.left": 0.05,
-        "figure.subplot.right": 0.95,
-        "figure.subplot.bottom": 0.15,
-        "figure.subplot.top": 0.9,
-        "figure.subplot.wspace": 0.3,
-        "figure.subplot.hspace": 0.3,
-        "lines.markersize": 2,
-        "lines.linewidth": 1.0,
-        "xtick.top": True,
-        "ytick.right": True,
-    }
-    pl.rcParams.update(rcparams)
+    if make_plots:
+        rcparams = {
+            "font.size": 12,
+            "font.family": "Times",
+            "text.usetex": True,
+            "figure.figsize": (5.5, 4),
+            "figure.subplot.left": 0.05,
+            "figure.subplot.right": 0.95,
+            "figure.subplot.bottom": 0.15,
+            "figure.subplot.top": 0.9,
+            "figure.subplot.wspace": 0.3,
+            "figure.subplot.hspace": 0.3,
+            "lines.markersize": 2,
+            "lines.linewidth": 1.0,
+            "xtick.top": True,
+            "ytick.right": True,
+        }
+        pl.rcParams.update(rcparams)
 
-    # Create a figure to show how good the fit was
-    fig, ax = pl.subplots(1, 1)
+        # Create a figure to show how good the fit was
+        fig, ax = pl.subplots(1, 1)
 
-    # First, plot the surface density map
-    levels = np.logspace(np.log10(imin), np.log10(imax), 100)
-    cs = ax.contourf(
-        xg,
-        yg,
-        image.data,
-        norm=matplotlib.colors.LogNorm(vmin=imin, vmax=imax),
-        levels=levels,
-    )
+        # First, plot the surface density map
+        levels = np.logspace(np.log10(imin), np.log10(imax), 100)
+        cs = ax.contourf(
+            xg,
+            yg,
+            image.data,
+            norm=matplotlib.colors.LogNorm(vmin=imin, vmax=imax),
+            levels=levels,
+        )
 
-    if A > 1.0:
-        # Now overplot the 1 Msun pc^-2 contour, using the parametric equation for
-        # the general ellipse
-        tpar = np.linspace(0.0, 2.0 * np.pi, 1000)
-        xpar = Dx * np.cos(theta) * np.cos(tpar) - Dy * np.sin(theta) * np.sin(tpar)
-        ypar = Dx * np.sin(theta) * np.cos(tpar) + Dy * np.cos(theta) * np.sin(tpar)
-        ax.plot(x0 + xpar, y0 + ypar, color="w", linestyle="--")
+        if A > 1.0:
+            # Now overplot the 1 Msun pc^-2 contour, using the parametric equation for
+            # the general ellipse
+            tpar = np.linspace(0.0, 2.0 * np.pi, 1000)
+            xpar = Dx * np.cos(theta) * np.cos(tpar) - Dy * np.sin(theta) * np.sin(tpar)
+            ypar = Dx * np.sin(theta) * np.cos(tpar) + Dy * np.cos(theta) * np.sin(tpar)
+            ax.plot(x0 + xpar, y0 + ypar, color="w", linestyle="--")
 
-    # Overplot 9 contour levels of the Gaussian function
-    image = gauss_curve(xs, *params).reshape((resolution, resolution))
-    levels = np.logspace(np.log10(imin), np.log10(imax), 10)
-    ax.contour(
-        xg,
-        yg,
-        image,
-        norm=matplotlib.colors.LogNorm(vmin=imin, vmax=imax),
-        levels=levels,
-        colors="w",
-    )
+        # Overplot 9 contour levels of the Gaussian function
+        image = gauss_curve(xs, *params).reshape((resolution, resolution))
+        levels = np.logspace(np.log10(imin), np.log10(imax), 10)
+        ax.contour(
+            xg,
+            yg,
+            image,
+            norm=matplotlib.colors.LogNorm(vmin=imin, vmax=imax),
+            levels=levels,
+            colors="w",
+        )
 
-    # Finalise and save the plot
-    ax.set_aspect("equal")
-    ax.set_xlabel("x (kpc)")
-    ax.set_ylabel("y (kpc)")
+        # Finalise and save the plot
+        ax.set_aspect("equal")
+        ax.set_xlabel("x (kpc)")
+        ax.set_ylabel("y (kpc)")
 
-    fig.colorbar(
-        cs,
-        label="Surface density (M$_\\odot{}$ pc$^{-2}$)",
-        ticks=matplotlib.ticker.LogLocator(),
-        format=matplotlib.ticker.LogFormatterMathtext(),
-    )
+        fig.colorbar(
+            cs,
+            label="Surface density (M$_\\odot{}$ pc$^{-2}$)",
+            ticks=matplotlib.ticker.LogLocator(),
+            format=matplotlib.ticker.LogFormatterMathtext(),
+        )
 
-    pl.tight_layout()
-    pl.savefig(f"test_HI_image_{index:03d}.png", dpi=300)
-    pl.close()
+        pl.tight_layout()
+        pl.savefig(f"test_HI_image_{index:03d}.png", dpi=300)
+        pl.close(fig)
 
     return HIsize, HImass
 
 
-def plot_HI_size_mass(output_path, name_list, all_galaxies_list):
+def plot_HI_size_mass(
+    output_path, observational_data_path, name_list, all_galaxies_list
+):
 
     fit_slope = 0.501
     fit_intercept = -3.252

@@ -146,6 +146,7 @@ if __name__ == "__main__":
 
     from morpholopy.HI_size import plot_HI_size_mass
     from morpholopy.morphology import plot_morphology
+    from morpholopy.KS import plot_KS_relations
 
     from morpholopy.config import MorphologyConfig
     from swiftpipeline.html import WebpageCreator
@@ -199,11 +200,10 @@ if __name__ == "__main__":
             ]
 
     # observational data will be added later
-    """
     observational_data_path = (
         f"{config.config_directory}/{config.observational_data_directory}/data"
     )
-    """
+    print(f"Observational data path: {observational_data_path}")
 
     is_comparison = len(args.snapshots) > 1
 
@@ -259,7 +259,8 @@ if __name__ == "__main__":
         for index, galaxy_data in map(process_galaxy, arglist):
         """
         print(
-            f"Computing properties for {number_of_galaxies} galaxies using {num_proc} parallel processes..."
+            f"Computing properties for {number_of_galaxies} galaxies using"
+            f" {num_proc} parallel processes..."
         )
         parent_env = os.environ.copy()
         pool = mp.Pool(
@@ -302,8 +303,21 @@ if __name__ == "__main__":
     if not os.path.exists(args.output):
         os.mkdir(args.output)
 
-    all_images.update(plot_HI_size_mass(args.output, run_names, all_galaxies_list))
-    all_images.update(plot_morphology(args.output, run_names, all_galaxies_list))
+    all_images.update(
+        plot_HI_size_mass(
+            args.output, observational_data_path, run_names, all_galaxies_list
+        )
+    )
+    all_images.update(
+        plot_morphology(
+            args.output, observational_data_path, run_names, all_galaxies_list
+        )
+    )
+    all_images.update(
+        plot_KS_relations(
+            args.output, observational_data_path, run_names, all_galaxies_list
+        )
+    )
 
     config.add_images(all_images)
 

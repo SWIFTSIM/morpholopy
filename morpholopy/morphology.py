@@ -101,7 +101,8 @@ def get_new_axis_lengths(partdata, half_mass_radius, mass_variable="masses"):
 
         if weight.sum() == 0.0:
             print(
-                "Total weight of 0, so not calculating axis lengths. Using last value that worked."
+                "Total weight of 0, so not calculating axis lengths."
+                " Using last value that worked."
             )
             break
 
@@ -181,7 +182,7 @@ def get_kappa_corot(
     return j, Kcorot / K
 
 
-def plot_morphology(output_path, name_list, all_galaxies_list):
+def plot_morphology(output_path, observational_data_path, name_list, all_galaxies_list):
 
     plots = {}
 
@@ -220,11 +221,17 @@ def plot_morphology(output_path, name_list, all_galaxies_list):
     plots["Specific angular momentum"] = {
         jstar_filename: {
             "title": "Specific angular momentum / Stars",
-            "caption": "Ratio between the total angular momentum of stars within 30 kpc of aperture divided by the total mass in stars.",
+            "caption": (
+                "Ratio between the total angular momentum of stars within 30 kpc"
+                " of aperture divided by the total mass in stars."
+            ),
         },
         jgas_filename: {
             "title": "Specific angular momentum / HI+H2 gas",
-            "caption": "Ratio between the total angular momentum of gas within 30 kpc of aperture divided by the total mass in gas.",
+            "caption": (
+                "Ratio between the total angular momentum of gas within 30 kpc"
+                " of aperture divided by the total mass in gas."
+            ),
         },
     }
 
@@ -263,11 +270,19 @@ def plot_morphology(output_path, name_list, all_galaxies_list):
     plots["Kappa corotation"] = {
         kappa_star_filename: {
             "title": "Kappa corotation / Stars",
-            "caption": "Kappa corotation is defined as the fraction of kinetic energy in a galaxy that is in ordered rotation. Note that the rotating contribution is calculated only for prograde rotation.",
+            "caption": (
+                "Kappa corotation is defined as the fraction of kinetic energy in"
+                " a galaxy that is in ordered rotation. Note that the rotating"
+                " contribution is calculated only for prograde rotation."
+            ),
         },
         kappa_gas_filename: {
             "title": "Kappa corotation / HI+H2 gas",
-            "caption": "Kappa corotation is defined as the fraction of kinetic energy in a galaxy that is in ordered rotation. Note that the rotating contribution is calculated only for prograde rotation.",
+            "caption": (
+                "Kappa corotation is defined as the fraction of kinetic energy in"
+                " a galaxy that is in ordered rotation. Note that the rotating"
+                " contribution is calculated only for prograde rotation."
+            ),
         },
     }
 
@@ -309,11 +324,21 @@ def plot_morphology(output_path, name_list, all_galaxies_list):
     plots["Axis ratios"] = {
         ratio_star_filename: {
             "title": "Axis ratios / Stars",
-            "caption": "Axial ratios of galaxies, based on the stars. a, b and c (a >= b >= c) represent the lengths of the primary axes. The axis lengths have been computed from the reduced moment of inertia tensor using the iterative scheme of Thob et al. (2018).",
+            "caption": (
+                "Axial ratios of galaxies, based on the stars. a, b and c"
+                " (a >= b >= c) represent the lengths of the primary axes."
+                " The axis lengths have been computed from the reduced moment"
+                " of inertia tensor using the iterative scheme of Thob et al. (2018)."
+            ),
         },
         ratio_gas_filename: {
             "title": "Axis ratios / HI+H2 gas",
-            "caption": "Axial ratios of galaxies, based on the neutral gas. a, b and c (a >= b >= c) represent the lengths of the primary axes. The axis lengths have been computed from the reduced moment of inertia tensor using the iterative scheme of Thob et al. (2018).",
+            "caption": (
+                "Axial ratios of galaxies, based on the neutral gas. a, b and c"
+                " (a >= b >= c) represent the lengths of the primary axes. The axis"
+                " lengths have been computed from the reduced moment of inertia tensor"
+                " using the iterative scheme of Thob et al. (2018)."
+            ),
         },
     }
 

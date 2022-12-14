@@ -1,4 +1,8 @@
+observational_data_directory: ../velociraptor-comparison-data
+
 description_template: description.html
+
+matplotlib_stylesheet: mnras.mplstyle
 
 mass_limit_stars_in_Msun: 1.e6
 mass_variable_stars: apertures.mass_star_30_kpc

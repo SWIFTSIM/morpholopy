@@ -36,55 +36,38 @@ data_fields = [
     ("gas_axis_cb", np.float32),
     ("gas_axis_ba", np.float32),
     ("gas_z_axis", (np.float32, 3)),
+    ("sigma_HI", np.float32),
     ("sigma_H2", np.float32),
-    ("sigma_gas", np.float32),
+    ("sigma_neutral", np.float32),
     ("sigma_SFR", np.float32),
     ("HI_size", np.float32),
     ("HI_mass", np.float32),
 ]
 
-medians = {
-    "sigma_gas_SFR_spatial": {
-        "number of bins x": 20,
-        "log x": True,
-        "range in x": [-1.0, 4.0],
-        "number of bins y": 100,
-        "log y": True,
-        "range in y": [-6.0, 1.0],
-        "x units": "Msun/pc**2",
-        "y units": "Msun/yr/kpc**2",
-    },
-    "sigma_H2_SFR_spatial": {
-        "number of bins x": 20,
-        "log x": True,
-        "range in x": [-1.0, 4.0],
-        "number of bins y": 100,
-        "log y": True,
-        "range in y": [-6.0, 1.0],
-        "x units": "Msun/pc**2",
-        "y units": "Msun/yr/kpc**2",
-    },
-    "sigma_gas_SFR_azimuthal": {
-        "number of bins x": 20,
-        "log x": True,
-        "range in x": [-1.0, 4.0],
-        "number of bins y": 100,
-        "log y": True,
-        "range in y": [-6.0, 1.0],
-        "x units": "Msun/pc**2",
-        "y units": "Msun/yr/kpc**2",
-    },
-    "sigma_H2_SFR_azimuthal": {
-        "number of bins x": 20,
-        "log x": True,
-        "range in x": [-1.0, 4.0],
-        "number of bins y": 100,
-        "log y": True,
-        "range in y": [-6.0, 1.0],
-        "x units": "Msun/pc**2",
-        "y units": "Msun/yr/kpc**2",
-    },
-}
+medians = {}
+for type in ["neutral", "HI", "H2"]:
+    for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
+        medians[f"sigma_{type}_tgas_spatial_{Zmask}"] = {
+            "number of bins x": 20,
+            "log x": True,
+            "range in x": [-1.0, 4.0],
+            "number of bins y": 100,
+            "log y": True,
+            "range in y": [7.0, 12.0],
+            "x units": "Msun/pc**2",
+            "y units": "yr",
+        }
+        for method in ["spatial", "azimuthal"]:
+            medians[f"sigma_{type}_SFR_{method}_{Zmask}"] = {
+                "number of bins x": 20,
+                "log x": True,
+                "range in x": [-1.0, 4.0],
+                "number of bins y": 100,
+                "log y": True,
+                "range in y": [-6.0, 1.0],
+                "x units": "Msun/pc**2",
+                "y units": "Msun/yr/kpc**2",
+            }
 
 median_data_fields = []
 for median in medians:
@@ -107,6 +90,10 @@ class GalaxyData:
 
     def __setitem__(self, key, value):
         if isinstance(key, list):
+            if len(key) != len(value):
+                raise RuntimeError(
+                    f"Provided different number of keys and values ({key}, {value})!"
+                )
             for k, v in zip(key, value):
                 self.data[0][k] = v
         else:
@@ -122,25 +109,6 @@ class GalaxyData:
 
 
 class AllGalaxyData:
-    output_order = [
-        "stellar_mass",
-        "stars_momentum",
-        "stars_kappa_co",
-        "stars_axis_ca",
-        "stars_axis_cb",
-        "stars_axis_ba",
-        "gas_momentum",
-        "gas_kappa_co",
-        "gas_axis_ca",
-        "gas_axis_cb",
-        "gas_axis_ba",
-        "sigma_H2",
-        "sigma_gas",
-        "sigma_SFR",
-        "HI_size",
-        "HI_mass",
-    ]
-
     def __init__(self, number_of_galaxies):
         self.data = np.zeros(number_of_galaxies, dtype=data_fields)
         self.median_data = None
@@ -162,7 +130,11 @@ class AllGalaxyData:
         return self.data[key]
 
     def __str__(self):
-        return f"Galaxy data object containing the following variables: {list(self.data.dtype.fields)}."
+        return (
+            "Galaxy data object containing the following:\n"
+            f" - variables: {list(self.data.dtype.fields)}\n"
+            f" - medians: {list(self.medians.keys())}"
+        )
 
     def __setitem__(self, index, galaxy_data):
         self.data[index] = galaxy_data.data[0]
@@ -305,6 +277,7 @@ def process_galaxy(args):
     ] = (0.0 * data.gas.star_formation_rates.units)
     data.gas.star_formation_rates.convert_to_physical()
     data.gas.H_neutral_mass = data.gas.HI_mass + data.gas.H2_mass
+    data.gas.metal_mass = data.gas.metal_mass_fractions * data.gas.masses
 
     # convert to the galaxy frame: subtract the galaxy centre position and
     # velocity from the particle coordinates and velocities
@@ -369,32 +342,72 @@ def process_galaxy(args):
     )
 
     galaxy_data[
-        ["sigma_H2", "sigma_gas", "sigma_SFR"]
+        ["sigma_HI", "sigma_H2", "sigma_neutral", "sigma_SFR"]
     ] = calculate_integrated_surface_densities(
         data, face_on_rmatrix, gas_mask, r_halfmass_star
     )
 
-    sigma_gas, sigma_H2, sigma_SFR = calculate_spatially_resolved_KS(
-        data, face_on_rmatrix, gas_mask, index
-    )
-    mask = (sigma_gas > 0.0) & (sigma_SFR > 0.0)
-    galaxy_data.accumulate_median_data(
-        "sigma_gas_SFR_spatial", sigma_gas[mask], sigma_SFR[mask]
-    )
-    mask = (sigma_H2 > 0.0) & (sigma_SFR > 0.0)
-    galaxy_data.accumulate_median_data(
-        "sigma_H2_SFR_spatial", sigma_H2[mask], sigma_SFR[mask]
-    )
-    sigma_gas, sigma_H2, sigma_SFR = calculate_azimuthally_averaged_KS(
-        data, face_on_rmatrix, gas_mask, index
-    )
-    if not sigma_gas is None:
-        galaxy_data.accumulate_median_data(
-            "sigma_gas_SFR_azimuthal", sigma_gas, sigma_SFR
-        )
-        galaxy_data.accumulate_median_data(
-            "sigma_H2_SFR_azimuthal", sigma_H2, sigma_SFR
-        )
+    (
+        sigma_neutral,
+        sigma_HI,
+        sigma_H2,
+        sigma_SFR,
+        tgas_neutral,
+        tgas_HI,
+        tgas_H2,
+        metallicity,
+    ) = calculate_spatially_resolved_KS(data, face_on_rmatrix, gas_mask, index)
+    metallicity[metallicity <= 0.0] = 1.0e-6
+    Zgas = np.log10(metallicity)
+    for sigma, tgas, name in [
+        (sigma_neutral, tgas_neutral, "neutral"),
+        (sigma_HI, tgas_HI, "HI"),
+        (sigma_H2, tgas_H2, "H2"),
+    ]:
+        for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
+            if Zmask != "all":
+                Zmin = {"Zm1": -1.2, "Z0": -0.2, "Zp1": 0.6}[Zmask]
+                # we use a Zmax of 1000 as infinite upper limit
+                Zmax = {"Zm1": -0.8, "Z0": 0.2, "Zp1": 1000.0}[Zmask]
+                mask = (Zgas >= Zmin) & (Zgas < Zmax)
+            else:
+                mask = np.ones(sigma.shape, dtype=bool)
+            vmask = mask & (sigma > 0.0) & (sigma_SFR > 0.0)
+            galaxy_data.accumulate_median_data(
+                f"sigma_{name}_SFR_spatial_{Zmask}", sigma[vmask], sigma_SFR[vmask]
+            )
+            vmask = mask & (tgas > 0.0) & (sigma > 0.0)
+            galaxy_data.accumulate_median_data(
+                f"sigma_{name}_tgas_spatial_{Zmask}", sigma[vmask], tgas[vmask]
+            )
+
+    (
+        sigma_neutral,
+        sigma_HI,
+        sigma_H2,
+        sigma_SFR,
+        metallicity,
+    ) = calculate_azimuthally_averaged_KS(data, face_on_rmatrix, gas_mask, index)
+    if sigma_neutral is not None:
+        metallicity[metallicity <= 0.0] = 1.0e-6
+        Zgas = np.log10(metallicity)
+        for sigma, name in [
+            (sigma_neutral, "neutral"),
+            (sigma_HI, "HI"),
+            (sigma_H2, "H2"),
+        ]:
+            for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
+                if Zmask != "all":
+                    Zmin = {"Zm1": -1.2, "Z0": -0.2, "Zp1": 0.6}[Zmask]
+                    # we use a Zmax of 1000 as infinite upper limit
+                    Zmax = {"Zm1": -0.8, "Z0": 0.2, "Zp1": 1000.0}[Zmask]
+                    mask = (Zgas >= Zmin) & (Zgas < Zmax)
+                else:
+                    mask = np.ones(sigma.shape, dtype=bool)
+                mask &= (sigma > 0.0) & (sigma_SFR > 0.0)
+                galaxy_data.accumulate_median_data(
+                    f"sigma_{name}_SFR_azimuthal_{Zmask}", sigma[mask], sigma_SFR[mask]
+                )
 
     galaxy_data[["HI_size", "HI_mass"]] = calculate_HI_size(
         data, face_on_rmatrix, gas_mask, index
