@@ -165,9 +165,11 @@ class AllGalaxyData:
 
 def process_galaxy(args):
 
-    index, galaxy_index, catalogue_filename, snapshot_filename, output_path, orientation_type, make_plots = (
+    index, galaxy_index, catalogue_filename, snapshot_filename, output_path, orientation_type, make_plots, main_log = (
         args
     )
+
+    galaxy_log = main_log.get_galaxy_log(galaxy_index)
 
     galaxy_data = GalaxyData()
 
@@ -235,6 +237,10 @@ def process_galaxy(args):
         r_halfmass_star.to("kpc"),
         comoving=False,
         cosmo_factor=data.gas.coordinates.cosmo_factor,
+    )
+
+    galaxy_log.message(
+        f"Galaxy {galaxy_index}: stellar mass: {galaxy_data['stellar_mass']:.2e}"
     )
 
     Rhalf = cosmo_array(
@@ -310,7 +316,7 @@ def process_galaxy(args):
         data, Rhalf, R200crit, Rvir, orientation_type
     )
 
-    (a, b, c), z_axis = get_new_axis_lengths(data.stars, Rhalf)
+    (a, b, c), z_axis = get_new_axis_lengths(galaxy_log, data.stars, Rhalf)
     stars_momentum, kappa_corot = get_kappa_corot(
         data.stars, Rhalf, R200crit, Rvir, orientation_type, orientation_vector
     )
@@ -324,7 +330,7 @@ def process_galaxy(args):
     galaxy_data["stars_momentum"] = stars_momentum
 
     (a, b, c), z_axis = get_new_axis_lengths(
-        data.gas, Rhalf, mass_variable="H_neutral_mass"
+        galaxy_log, data.gas, Rhalf, mass_variable="H_neutral_mass"
     )
     if (a > 0.0) and (b > 0.0) and (c > 0.0):
         galaxy_data["gas_axis_ca"] = c / a
@@ -410,7 +416,7 @@ def process_galaxy(args):
                 )
 
     galaxy_data[["HI_size", "HI_mass"]] = calculate_HI_size(
-        data, face_on_rmatrix, gas_mask, index
+        galaxy_log, data, face_on_rmatrix, gas_mask, index
     )
 
     if make_plots:

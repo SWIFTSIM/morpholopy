@@ -13,7 +13,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as pl
 
 
-def get_new_axis_lengths(partdata, half_mass_radius, mass_variable="masses"):
+def get_new_axis_lengths(
+    galaxy_log, partdata, half_mass_radius, mass_variable="masses"
+):
 
     all_position = partdata.coordinates
     all_mass = getattr(partdata, mass_variable)
@@ -30,7 +32,7 @@ def get_new_axis_lengths(partdata, half_mass_radius, mass_variable="masses"):
     )
 
     if weight.sum() == 0.0:
-        print("Total weight of 0, so not calculating axis lengths.")
+        galaxy_log.debug("Total weight of 0, so not calculating axis lengths.")
         return unyt.unyt_array(np.zeros(3), position.units), np.zeros(3)
 
     Itensor = (weight[:, None, None] / weight.sum()) * np.ones((weight.shape[0], 3, 3))
@@ -57,7 +59,7 @@ def get_new_axis_lengths(partdata, half_mass_radius, mass_variable="masses"):
     R2 = (0.5 * half_mass_radius) ** 2
 
     if (axes[0] == 0.0) or (axes[1] == 0.0) or (axes[2] == 0.0):
-        print(f"Zero axis ratio! Giving up on this galaxy.")
+        galaxy_log.debug(f"Zero axis ratio! Giving up on this galaxy.")
         return unyt.unyt_array(np.zeros(3), position.units), np.zeros(3)
 
     c_a = axes[2] / axes[0]
@@ -70,12 +72,12 @@ def get_new_axis_lengths(partdata, half_mass_radius, mass_variable="masses"):
     ):
 
         if (c_a == 0.0) or (b_a == 0.0):
-            print(f"Zero axis ratio! Giving up on this galaxy.")
+            galaxy_log.debug(f"Zero axis ratio! Giving up on this galaxy.")
             return unyt.unyt_array(np.zeros(3), position.units), np.zeros(3)
 
         loop += 1
         if loop == 100:
-            print(
+            galaxy_log.debug(
                 f"Too many iterations (c_a: {old_c_a} - {c_a}, b_a: {old_b_a} - {b_a})!"
             )
             break
@@ -100,7 +102,7 @@ def get_new_axis_lengths(partdata, half_mass_radius, mass_variable="masses"):
         )
 
         if weight.sum() == 0.0:
-            print(
+            galaxy_log.debug(
                 "Total weight of 0, so not calculating axis lengths."
                 " Using last value that worked."
             )

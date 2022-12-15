@@ -70,7 +70,6 @@ parser.add_argument(
 )
 
 # debug mode?
-"""
 parser.add_argument(
     "-d",
     "--debug",
@@ -79,7 +78,6 @@ parser.add_argument(
     action="store_true",
     help="Run in debug mode if this flag is present. Default: no.",
 )
-"""
 
 
 parser.add_argument(
@@ -148,6 +146,8 @@ if __name__ == "__main__":
     from morpholopy.morphology import plot_morphology
     from morpholopy.KS import plot_KS_relations
 
+    from morpholopy.logging import MainLog
+
     from morpholopy.config import MorphologyConfig
     from swiftpipeline.html import WebpageCreator
 
@@ -165,12 +165,14 @@ if __name__ == "__main__":
     # relevant data in memory are copied
     mp.set_start_method("forkserver")
 
+    args = parser.parse_args()
+
+    main_log = MainLog(log_level="WORKERDEBUG" if args.debug else "WORKER")
+
     # create a temporary directory for the per subprocess Matplotlib cache
     # directories
     tmpdir = tempfile.mkdtemp()
-    print(f"Will save temporary files in {tmpdir}")
-
-    args = parser.parse_args()
+    main_log.debug(f"Will save temporary files in {tmpdir}")
 
     config = MorphologyConfig(config_directory=args.config)
 
@@ -203,7 +205,7 @@ if __name__ == "__main__":
     observational_data_path = (
         f"{config.config_directory}/{config.observational_data_directory}/data"
     )
-    print(f"Observational data path: {observational_data_path}")
+    main_log.debug(f"Observational data path: {observational_data_path}")
 
     if not os.path.exists(args.output):
         os.mkdir(args.output)
@@ -245,6 +247,7 @@ if __name__ == "__main__":
                 args.output,
                 config.orientation_method,
                 make_plots,
+                main_log,
             )
             for index, (galaxy_index, make_plots) in enumerate(
                 zip(filtered_catalogue.galaxy_indices, filtered_catalogue.plot_galaxy)
@@ -261,7 +264,7 @@ if __name__ == "__main__":
         # serial version (has better crash reports)
         for index, galaxy_data in map(process_galaxy, arglist):
         """
-        print(
+        main_log.message(
             f"Computing properties for {number_of_galaxies} galaxies using"
             f" {num_proc} parallel processes..."
         )
@@ -272,13 +275,13 @@ if __name__ == "__main__":
         galaxy_count = 0
         for index, galaxy_data, images in pool.imap_unordered(process_galaxy, arglist):
             galaxy_count += 1
-            print(
+            main_log.debug(
                 f"Finished processing galaxy {index} [{galaxy_count}/{number_of_galaxies}]"
             )
             # add galaxy contribution to global data
             all_galaxies[index] = galaxy_data
             if images is not None:
-                print(f"Adding figures for galaxy {index}")
+                main_log.debug(f"Adding figures for galaxy {index}")
                 all_images[f"ZZZ - Galaxy {index}"] = images
         pool.close()
         pool.join()
@@ -330,5 +333,5 @@ if __name__ == "__main__":
     webpage.save_html(f"{args.output}/index.html")
 
     # Remove the temporary directory hosting the Matplotlib caches
-    print(f"Removing temporary directory {tmpdir}")
+    main_log.debug(f"Removing temporary directory {tmpdir}")
     shutil.rmtree(tmpdir)

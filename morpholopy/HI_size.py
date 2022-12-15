@@ -36,7 +36,9 @@ def gauss_curve(x, A, a, b, c, x0, y0):
     )
 
 
-def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
+def calculate_HI_size(
+    galaxy_log, data, face_on_rmatrix, gas_mask, index, resolution=128
+):
     """
     Calculate the HI size of the given galaxy by fitting a 2D elliptical function
     to the surface density profile and measuring the diameter along the major axis
@@ -77,7 +79,7 @@ def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
     HImass = image.sum() * (R / resolution) ** 2
 
     if HImass == 0.0:
-        print("Neutral gas mass is zero, not computing HI size.")
+        galaxy_log.debug("Neutral gas mass is zero, not computing HI size.")
         return 0.0, 0.0
 
     # get the limits (for plotting)
@@ -106,7 +108,7 @@ def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
             gauss_curve, xs, image.flatten(), p0=(A, a, b, c, 0.0, 0.0)
         )
     except RuntimeError:
-        print("Unable to fit HI profile. Will not compute HI size.")
+        galaxy_log.debug("Unable to fit HI profile. Will not compute HI size.")
         return 0.0, 0.0
 
     # extract the fitted parameters
@@ -115,7 +117,7 @@ def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
     # the HI size is determined from the 1 Msun pc^-2 contour level. If the fitted
     # profile has a central surface density that is lower, the HI size is undefined
     if A <= 1.0:
-        print(
+        galaxy_log.debug(
             "Central surface density below 1 Msun pc^-2 limit, no HI size measurement possible!"
         )
         HIsize = 0.0
@@ -134,7 +136,7 @@ def calculate_HI_size(data, face_on_rmatrix, gas_mask, index, resolution=128):
         Dy = np.sqrt(2.0 * sigY2 * np.log(A))
 
         if Dx < Dy:
-            print("Error: major axis smaller than minor axis!")
+            galaxy_log.debug("Error: major axis smaller than minor axis!")
 
         # Compute the HI size
         HIsize = 2.0 * Dx
