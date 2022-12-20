@@ -220,6 +220,7 @@ class AllGalaxyData:
             self.medians[key] = {
                 "x centers": xvals.tolist(),
                 "y values": yvals.tolist(),
+                "PDF": self.median_data[0][key].tolist(),
                 **medians[key],
             }
 

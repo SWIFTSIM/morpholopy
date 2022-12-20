@@ -1,5 +1,6 @@
 import numpy as np
 import unyt
+import matplotlib
 
 
 def accumulate_median_data(median, values_x, values_y):
@@ -93,6 +94,7 @@ def plot_median_on_axis_as_line(ax, median, color, linestyle="-"):
         ax.set_xlim(10.0 ** xlims[0], 10.0 ** xlims[1])
     else:
         ax.set_xlim(*xlims)
+        xscale = "linear"
 
     ylims = median["range in y"]
     if median["log y"]:
@@ -102,6 +104,51 @@ def plot_median_on_axis_as_line(ax, median, color, linestyle="-"):
         ax.set_ylim(*ylims)
 
     return line
+
+
+def plot_median_on_axis_as_pdf(ax, median):
+
+    range_x = median["range in x"]
+    range_y = median["range in y"]
+    nx = median["number of bins x"]
+    ny = median["number of bins y"]
+    xbin_edges = np.linspace(range_x[0], range_x[1], nx + 1)
+    ybin_edges = np.linspace(range_y[0], range_y[1], ny + 1)
+    xscale = "linear"
+    if median["log x"]:
+        xbin_edges = 10.0 ** xbin_edges
+        xscale = "log"
+    yscale = "linear"
+    if median["log y"]:
+        ybin_edges = 10.0 ** ybin_edges
+        yscale = "log"
+
+    xbin_centres = 0.5 * (xbin_edges[1:] + xbin_edges[:-1])
+    ybin_centres = 0.5 * (ybin_edges[1:] + ybin_edges[:-1])
+    xv, yv = np.meshgrid(xbin_centres, ybin_centres)
+
+    PDF = np.array(median["PDF"])
+
+    ax.hexbin(
+        xv.flatten(),
+        yv.flatten(),
+        PDF.T.flatten(),
+        bins="log",
+        xscale=xscale,
+        yscale=yscale,
+    )
+
+    if median["log x"]:
+        ax.set_xscale("log")
+        ax.set_xlim(10.0 ** range_x[0], 10.0 ** range_x[1])
+    else:
+        ax.set_xlim(*range_x)
+
+    if median["log y"]:
+        ax.set_yscale("log")
+        ax.set_ylim(10.0 ** range_y[0], 10.0 ** range_y[1])
+    else:
+        ax.set_ylim(*range_y)
 
 
 def test_median():

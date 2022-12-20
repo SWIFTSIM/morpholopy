@@ -9,7 +9,7 @@ import matplotlib.pyplot as pl
 from velociraptor.observations import load_observations
 import glob
 
-from .medians import plot_median_on_axis_as_line
+from .medians import plot_median_on_axis_as_line, plot_median_on_axis_as_pdf
 
 make_plots = False
 Zsolar = 0.0134
@@ -778,6 +778,8 @@ def plot_KS_relations(
     sim_lines = []
     sim_labels = []
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        if len(name_list) == 1:
+            plot_median_on_axis_as_pdf(ax, data.medians["H2_to_star_vs_star_spatial"])
         line = plot_median_on_axis_as_line(
             ax, data.medians["H2_to_star_vs_star_spatial"], color=f"C{i}"
         )
@@ -814,6 +816,8 @@ def plot_KS_relations(
     sim_lines = []
     sim_labels = []
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        if len(name_list) == 1:
+            plot_median_on_axis_as_pdf(ax, data.medians["SFR_to_H2_vs_H2_spatial"])
         line = plot_median_on_axis_as_line(
             ax, data.medians["SFR_to_H2_vs_H2_spatial"], color=f"C{i}"
         )
@@ -850,6 +854,8 @@ def plot_KS_relations(
     sim_lines = []
     sim_labels = []
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        if len(name_list) == 1:
+            plot_median_on_axis_as_pdf(ax, data.medians["SFR_to_star_vs_star_spatial"])
         line = plot_median_on_axis_as_line(
             ax, data.medians["SFR_to_star_vs_star_spatial"], color=f"C{i}"
         )
