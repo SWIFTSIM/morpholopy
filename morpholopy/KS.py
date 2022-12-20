@@ -9,12 +9,14 @@ import matplotlib.pyplot as pl
 from velociraptor.observations import load_observations
 import glob
 
+from .medians import plot_median_on_axis_as_line
+
 make_plots = False
 Zsolar = 0.0134
 
 
 def calculate_surface_densities_grid(
-    data, face_on_rmatrix, gas_mask, index, resolution=128
+    data, face_on_rmatrix, gas_mask, stars_mask, index, resolution=128
 ):
 
     R = sw.objects.cosmo_array(
@@ -42,6 +44,24 @@ def calculate_surface_densities_grid(
             rotation_matrix=face_on_rmatrix,
             region=[-R, R, -R, R, -R, R],
         )
+
+    stars_pixel_grid = sw.visualisation.projection.project_pixel_grid(
+        data.stars,
+        project="masses",
+        resolution=resolution,
+        mask=stars_mask,
+        rotation_center=unyt.unyt_array(
+            [0.0, 0.0, 0.0], units=data.gas.coordinates.units
+        ),
+        rotation_matrix=face_on_rmatrix,
+        region=[-R, R, -R, R, -R, R],
+        boxsize=data.metadata.boxsize,
+    )
+    units = 1.0 / (4.0 * R ** 2)
+    units.convert_to_units(1.0 / R.units ** 2)
+    units *= data.stars.masses.units
+    images["star_mass"] = unyt.unyt_array(stars_pixel_grid, units=units)
+    images["star_mass"].convert_to_units("Msun/pc**2")
 
     images["metallicity"] = unyt.unyt_array(
         np.zeros_like(images["masses"]), "dimensionless"
@@ -82,12 +102,12 @@ def calculate_surface_densities_grid(
     return images
 
 
-def calculate_spatially_resolved_KS(data, face_on_rmatrix, gas_mask, index):
+def calculate_spatially_resolved_KS(data, face_on_rmatrix, gas_mask, stars_mask, index):
     image_diameter = 60.0 * unyt.kpc
     pixel_size = 0.75 * unyt.kpc
     resolution = int((image_diameter / pixel_size).value) + 1
     images = calculate_surface_densities_grid(
-        data, face_on_rmatrix, gas_mask, index, resolution
+        data, face_on_rmatrix, gas_mask, stars_mask, index, resolution
     )
 
     return (
@@ -99,6 +119,7 @@ def calculate_spatially_resolved_KS(data, face_on_rmatrix, gas_mask, index):
         images["tgas_HI_mass"].value.flatten(),
         images["tgas_H2_mass"].value.flatten(),
         images["metallicity"].value.flatten(),
+        images["star_mass"].value.flatten(),
     )
 
 
@@ -269,7 +290,9 @@ def plot_KS_relations(
         sim_labels = []
         for i, name in enumerate(name_list):
             marker = markers[i]
-            sim_lines.append(ax.plot([], [], marker=marker, color="k")[0])
+            sim_lines.append(
+                ax.plot([], [], marker=marker, color="k", linestyle="None")[0]
+            )
             sim_labels.append(name)
         ax.grid(True)
         ax.set_xscale("log")
@@ -331,27 +354,24 @@ def plot_KS_relations(
             ("Z0", ":"),
             ("Zp1", "-."),
         ]:
-            med_neut = data.medians[f"sigma_neutral_SFR_azimuthal_{Zmask}"]
-            med_at = data.medians[f"sigma_HI_SFR_azimuthal_{Zmask}"]
-            med_mol = data.medians[f"sigma_H2_SFR_azimuthal_{Zmask}"]
-
-            x_neut = unyt.unyt_array(med_neut["x centers"], med_neut["x units"])
-            x_neut.name = "Neutral Gas Surface Density"
-            y_neut = unyt.unyt_array(med_neut["y values"], med_neut["y units"])
-            y_neut.name = "Star Formation Rate Surface Density"
-            x_at = unyt.unyt_array(med_at["x centers"], med_at["x units"])
-            x_at.name = "Atomic Gas Surface Density"
-            y_at = unyt.unyt_array(med_at["y values"], med_at["y units"])
-            y_at.name = "Star Formation Rate Surface Density"
-            x_mol = unyt.unyt_array(med_mol["x centers"], med_mol["x units"])
-            x_mol.name = "Molecular Gas Surface Density"
-            y_mol = unyt.unyt_array(med_mol["y values"], med_mol["y units"])
-            y_mol.name = "Star Formation Rate Surface Density"
-
-            with unyt.matplotlib_support:
-                ax_neut.loglog(x_neut, y_neut, linestyle, color=f"C{i}")
-                ax_at.loglog(x_at, y_at, linestyle, color=f"C{i}")
-                ax_mol.loglog(x_mol, y_mol, linestyle, color=f"C{i}")
+            plot_median_on_axis_as_line(
+                ax_neut,
+                data.medians[f"sigma_neutral_SFR_azimuthal_{Zmask}"],
+                color=f"C{i}",
+                linestyle=linestyle,
+            )
+            plot_median_on_axis_as_line(
+                ax_at,
+                data.medians[f"sigma_HI_SFR_azimuthal_{Zmask}"],
+                color=f"C{i}",
+                linestyle=linestyle,
+            )
+            plot_median_on_axis_as_line(
+                ax_mol,
+                data.medians[f"sigma_H2_SFR_azimuthal_{Zmask}"],
+                color=f"C{i}",
+                linestyle=linestyle,
+            )
 
     for dataname, ax in [
         ("AzimuthallyAveragedNeutralKSRelation", ax_neut),
@@ -451,27 +471,24 @@ def plot_KS_relations(
             ("Z0", ":"),
             ("Zp1", "-."),
         ]:
-            med_neut = data.medians[f"sigma_neutral_SFR_spatial_{Zmask}"]
-            med_at = data.medians[f"sigma_HI_SFR_spatial_{Zmask}"]
-            med_mol = data.medians[f"sigma_H2_SFR_spatial_{Zmask}"]
-
-            x_neut = unyt.unyt_array(med_neut["x centers"], med_neut["x units"])
-            x_neut.name = "Neutral Gas Surface Density"
-            y_neut = unyt.unyt_array(med_neut["y values"], med_neut["y units"])
-            y_neut.name = "Star Formation Rate Surface Density"
-            x_at = unyt.unyt_array(med_at["x centers"], med_at["x units"])
-            x_at.name = "Atomic Gas Surface Density"
-            y_at = unyt.unyt_array(med_at["y values"], med_at["y units"])
-            y_at.name = "Star Formation Rate Surface Density"
-            x_mol = unyt.unyt_array(med_mol["x centers"], med_mol["x units"])
-            x_mol.name = "Molecular Gas Surface Density"
-            y_mol = unyt.unyt_array(med_mol["y values"], med_mol["y units"])
-            y_mol.name = "Star Formation Rate Surface Density"
-
-            with unyt.matplotlib_support:
-                ax_neut.loglog(x_neut, y_neut, linestyle, color=f"C{i}")
-                ax_at.loglog(x_at, y_at, linestyle, color=f"C{i}")
-                ax_mol.loglog(x_mol, y_mol, linestyle, color=f"C{i}")
+            plot_median_on_axis_as_line(
+                ax_neut,
+                data.medians[f"sigma_neutral_SFR_spatial_{Zmask}"],
+                color=f"C{i}",
+                linestyle=linestyle,
+            )
+            plot_median_on_axis_as_line(
+                ax_at,
+                data.medians[f"sigma_HI_SFR_spatial_{Zmask}"],
+                color=f"C{i}",
+                linestyle=linestyle,
+            )
+            plot_median_on_axis_as_line(
+                ax_mol,
+                data.medians[f"sigma_H2_SFR_spatial_{Zmask}"],
+                color=f"C{i}",
+                linestyle=linestyle,
+            )
 
     for dataname, ax in [
         ("SpatiallyResolvedNeutralKSRelation", ax_neut),
@@ -575,28 +592,24 @@ def plot_KS_relations(
             ("Z0", ":"),
             ("Zp1", "-."),
         ]:
-            med_neut = data.medians[f"sigma_neutral_tgas_spatial_{Zmask}"]
-            med_at = data.medians[f"sigma_HI_tgas_spatial_{Zmask}"]
-            med_mol = data.medians[f"sigma_H2_tgas_spatial_{Zmask}"]
-
-            x_neut = unyt.unyt_array(med_neut["x centers"], med_neut["x units"])
-            x_neut.name = "Neutral Gas Surface Density"
-            y_neut = unyt.unyt_array(med_neut["y values"], med_neut["y units"])
-            y_neut.name = "Neutral Gas Depletion Time"
-            x_at = unyt.unyt_array(med_at["x centers"], med_at["x units"])
-            x_at.name = "Atomic Gas Surface Density"
-            y_at = unyt.unyt_array(med_at["y values"], med_at["y units"])
-            y_at.name = "Atomic Gas Depletion Time"
-            x_mol = unyt.unyt_array(med_mol["x centers"], med_mol["x units"])
-            x_mol.name = "Molecular Gas Surface Density"
-            y_mol = unyt.unyt_array(med_mol["y values"], med_mol["y units"])
-            y_mol.name = "Molecular Gas Depletion Time"
-
-            label = name if Zmask == "all" else None
-            with unyt.matplotlib_support:
-                ax_neut.loglog(x_neut, y_neut, linestyle, label=label, color=f"C{i}")
-                ax_at.loglog(x_at, y_at, linestyle, label=label, color=f"C{i}")
-                ax_mol.loglog(x_mol, y_mol, linestyle, label=label, color=f"C{i}")
+            plot_median_on_axis_as_line(
+                ax_neut,
+                data.medians[f"sigma_neutral_tgas_spatial_{Zmask}"],
+                color=f"C{i}",
+                linestyle=linestyle,
+            )
+            plot_median_on_axis_as_line(
+                ax_at,
+                data.medians[f"sigma_HI_tgas_spatial_{Zmask}"],
+                color=f"C{i}",
+                linestyle=linestyle,
+            )
+            plot_median_on_axis_as_line(
+                ax_mol,
+                data.medians[f"sigma_H2_tgas_spatial_{Zmask}"],
+                color=f"C{i}",
+                linestyle=linestyle,
+            )
 
     for ax in [ax_neut, ax_at, ax_mol]:
         for Zlabel, linestyle in [
@@ -675,22 +688,18 @@ def plot_KS_relations(
             ("Z0", ":"),
             ("Zp1", "-."),
         ]:
-            med_neut = data.medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"]
-            med_at = data.medians[f"H2_to_HI_vs_neutral_spatial_{Zmask}"]
-
-            x_neut = unyt.unyt_array(med_neut["x centers"], med_neut["x units"])
-            x_neut.name = "Neutral Gas Surface Density"
-            y_neut = unyt.unyt_array(med_neut["y values"], med_neut["y units"])
-            y_neut.name = "Molecular to Neutral Gas Surface Density"
-            x_at = unyt.unyt_array(med_neut["x centers"], med_neut["x units"])
-            x_at.name = "Neutral Gas Surface Density"
-            y_at = unyt.unyt_array(med_neut["y values"], med_neut["y units"])
-            y_at.name = "Molecular to Atomic Gas Surface Density"
-
-            label = name if Zmask == "all" else None
-            with unyt.matplotlib_support:
-                ax_neut.loglog(x_neut, y_neut, linestyle, color=f"C{i}")
-                ax_at.loglog(x_at, y_at, linestyle, color=f"C{i}")
+            plot_median_on_axis_as_line(
+                ax_neut,
+                data.medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"],
+                color=f"C{i}",
+                linestyle=linestyle,
+            )
+            plot_median_on_axis_as_line(
+                ax_at,
+                data.medians[f"H2_to_HI_vs_neutral_spatial_{Zmask}"],
+                color=f"C{i}",
+                linestyle=linestyle,
+            )
 
     for dataname, ax in [("NeutralGasSurfaceDensityMolecularToAtomicRatio", ax_at)]:
         observational_data = load_observations(
@@ -761,6 +770,114 @@ def plot_KS_relations(
                     " metallicity (as indicated in the legend)."
                 ),
             },
+        }
+    )
+
+    fig, ax = pl.subplots(1, 1)
+
+    sim_lines = []
+    sim_labels = []
+    for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        line = plot_median_on_axis_as_line(
+            ax, data.medians["H2_to_star_vs_star_spatial"], color=f"C{i}"
+        )
+        sim_lines.append(line)
+        sim_labels.append(name)
+
+    ax.grid(True)
+    ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
+    sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+    ax.legend(loc="lower right")
+    ax.add_artist(sim_legend)
+    ax.set_xlim(1.0e-1, 1.0e4)
+    ax.set_ylim(1.0e-3, 1.0e1)
+
+    filename = "H2_to_star_vs_star_spatial.png"
+    fig.savefig(f"{output_path}/{filename}", dpi=300)
+    pl.close(fig)
+
+    plots["Combined surface densities"].update(
+        {
+            filename: {
+                "title": "Molecular to Stellar density vs Stellar Density",
+                "caption": (
+                    "Ratio of the molecular gas surface density and the stellar surface"
+                    " density as a function of the stellar surface density. Computed"
+                    " using a grid with a pixel size of 750 pc."
+                ),
+            }
+        }
+    )
+
+    fig, ax = pl.subplots(1, 1)
+
+    sim_lines = []
+    sim_labels = []
+    for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        line = plot_median_on_axis_as_line(
+            ax, data.medians["SFR_to_H2_vs_H2_spatial"], color=f"C{i}"
+        )
+        sim_lines.append(line)
+        sim_labels.append(name)
+
+    ax.grid(True)
+    ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
+    sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+    ax.legend(loc="lower right")
+    ax.add_artist(sim_legend)
+    ax.set_xlim(1.0e-2, 1.0e3)
+    ax.set_ylim(1.0e-11, 1.0e-7)
+
+    filename = "SFR_to_H2_vs_H2_spatial.png"
+    fig.savefig(f"{output_path}/{filename}", dpi=300)
+    pl.close(fig)
+
+    plots["Combined surface densities"].update(
+        {
+            filename: {
+                "title": "SFR to Molecular density vs Molecular Density",
+                "caption": (
+                    "Ratio of the SFR surface density and the molecular gas surface"
+                    " density as a function of the molecular gas surface density."
+                    " Computed using a grid with a pixel size of 750 pc."
+                ),
+            }
+        }
+    )
+
+    fig, ax = pl.subplots(1, 1)
+
+    sim_lines = []
+    sim_labels = []
+    for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        line = plot_median_on_axis_as_line(
+            ax, data.medians["SFR_to_star_vs_star_spatial"], color=f"C{i}"
+        )
+        sim_lines.append(line)
+        sim_labels.append(name)
+
+    ax.grid(True)
+    ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
+    sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+    ax.legend(loc="lower right")
+    ax.add_artist(sim_legend)
+    ax.set_xlim(1.0e-1, 1.0e4)
+    ax.set_ylim(1.0e-13, 1.0e-7)
+
+    filename = "SFR_to_star_vs_star_spatial.png"
+    fig.savefig(f"{output_path}/{filename}", dpi=300)
+    pl.close(fig)
+
+    plots["Combined surface densities"].update(
+        {
+            filename: {
+                "title": "SFR to Stellar density vs Stellar Density",
+                "caption": (
+                    "Ratio of the SFR surface density and the stellar surface"
+                    " density as a function of the stellar surface density."
+                    " Computed using a grid with a pixel size of 750 pc."
+                ),
+            }
         }
     )
 

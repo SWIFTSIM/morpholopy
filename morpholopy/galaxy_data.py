@@ -45,7 +45,11 @@ data_fields = [
 ]
 
 medians = {}
-for type in ["neutral", "HI", "H2"]:
+for type, label in [
+    ("neutral", "$\\Sigma{}_{{\\rm{}HI}+{\\rm{}H2}}$"),
+    ("HI", "$\\Sigma{}_{\\rm{}HI}$"),
+    ("H2", "$\\Sigma{}_{\\rm{}H2}$"),
+]:
     for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
         medians[f"sigma_{type}_tgas_spatial_{Zmask}"] = {
             "number of bins x": 20,
@@ -56,6 +60,8 @@ for type in ["neutral", "HI", "H2"]:
             "range in y": [7.0, 12.0],
             "x units": "Msun/pc**2",
             "y units": "yr",
+            "x label": label,
+            "y label": label + "$/\\Sigma{}_{{\\rm{}SFR}}}$",
         }
         for method in ["spatial", "azimuthal"]:
             medians[f"sigma_{type}_SFR_{method}_{Zmask}"] = {
@@ -67,6 +73,8 @@ for type in ["neutral", "HI", "H2"]:
                 "range in y": [-6.0, 1.0],
                 "x units": "Msun/pc**2",
                 "y units": "Msun/yr/kpc**2",
+                "x label": label,
+                "y label": "$\\Sigma{}_{{\\rm{}SFR}}}$",
             }
 for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
     medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"] = {
@@ -78,6 +86,8 @@ for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
         "range in y": [-8.0, 1.0],
         "x units": "Msun/pc**2",
         "y units": "dimensionless",
+        "x label": "$\\Sigma{}_{{\\rm{}HI}+{\\rm{}H2}}$",
+        "y label": "$\\Sigma{}_{\\rm{}H2}/\\Sigma{}_{{\\rm{}HI}+{\\rm{}H2}}$",
     }
     medians[f"H2_to_HI_vs_neutral_spatial_{Zmask}"] = {
         "number of bins x": 20,
@@ -88,7 +98,46 @@ for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
         "range in y": [-2.0, 3.0],
         "x units": "Msun/pc**2",
         "y units": "dimensionless",
+        "x label": "$\\Sigma{}_{{\\rm{}HI}+{\\rm{}H2}}$",
+        "y label": "$\\Sigma{}_{\\rm{}H2}/\\Sigma{}_{\\rm{}HI}$",
     }
+
+medians["H2_to_star_vs_star_spatial"] = {
+    "number of bins x": 20,
+    "log x": True,
+    "range in x": [-1.0, 4.0],
+    "number of bins y": 100,
+    "log y": True,
+    "range in y": [-3.0, 1.0],
+    "x units": "Msun/pc**2",
+    "y units": "dimensionless",
+    "x label": "$\\Sigma{}_{\\bigstar{}}$",
+    "y label": "$\\Sigma{}_{\\rm{}H2}/\\Sigma{}_{\\bigstar{}}$",
+}
+medians["SFR_to_H2_vs_H2_spatial"] = {
+    "number of bins x": 20,
+    "log x": True,
+    "range in x": [-2.0, 3.0],
+    "number of bins y": 100,
+    "log y": True,
+    "range in y": [-11.0, -7.0],
+    "x units": "Msun/pc**2",
+    "y units": "1/yr",
+    "x label": "$\\Sigma{}_{\\rm{}H2}$",
+    "y label": "$\\Sigma{}_{\\rm{}SFR}/\\Sigma{}_{\\rm{}H2}$",
+}
+medians["SFR_to_star_vs_star_spatial"] = {
+    "number of bins x": 20,
+    "log x": True,
+    "range in x": [-1.0, 4.0],
+    "number of bins y": 100,
+    "log y": True,
+    "range in y": [-13.0, -7.0],
+    "x units": "Msun/pc**2",
+    "y units": "1/yr",
+    "x label": "$\\Sigma{}_{\\bigstar{}}$",
+    "y label": "$\\Sigma{}_{\\rm{}SFR}/\\Sigma{}_{\\bigstar{}}$",
+}
 
 median_data_fields = []
 for median in medians:
@@ -383,7 +432,10 @@ def process_galaxy(args):
         tgas_HI,
         tgas_H2,
         metallicity,
-    ) = calculate_spatially_resolved_KS(data, face_on_rmatrix, gas_mask, index)
+        sigma_star,
+    ) = calculate_spatially_resolved_KS(
+        data, face_on_rmatrix, gas_mask, stars_mask, index
+    )
     metallicity[metallicity <= 0.0] = 1.0e-6
     Zgas = np.log10(metallicity)
     for sigma, tgas, name in [
@@ -423,6 +475,26 @@ def process_galaxy(args):
                 sigma_neutral[vmask],
                 sigma_H2[vmask] / sigma[vmask],
             )
+
+    mask = (sigma_star > 0.0) & (sigma_H2 > 0.0)
+    galaxy_data.accumulate_median_data(
+        "H2_to_star_vs_star_spatial",
+        sigma_star[mask],
+        sigma_H2[mask] / sigma_star[mask],
+    )
+    mask = (sigma_SFR > 0.0) & (sigma_H2 > 0.0)
+    # manually convert from 1/kpc**2 to 1/pc**2 in the SFR
+    galaxy_data.accumulate_median_data(
+        "SFR_to_H2_vs_H2_spatial",
+        sigma_H2[mask],
+        sigma_SFR[mask] / sigma_H2[mask] * 1.0e-6,
+    )
+    mask = (sigma_star > 0.0) & (sigma_SFR > 0.0)
+    galaxy_data.accumulate_median_data(
+        "SFR_to_star_vs_star_spatial",
+        sigma_star[mask],
+        sigma_SFR[mask] / sigma_star[mask] * 1.0e-6,
+    )
 
     (
         sigma_neutral,
