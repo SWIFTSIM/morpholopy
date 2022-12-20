@@ -688,6 +688,13 @@ def plot_KS_relations(
             ("Z0", ":"),
             ("Zp1", "-."),
         ]:
+            if Zmask == "all" and len(name_list) == 1:
+                plot_median_on_axis_as_pdf(
+                    ax_neut, data.medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"]
+                )
+                plot_median_on_axis_as_pdf(
+                    ax_at, data.medians[f"H2_to_HI_vs_neutral_spatial_{Zmask}"]
+                )
             plot_median_on_axis_as_line(
                 ax_neut,
                 data.medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"],
