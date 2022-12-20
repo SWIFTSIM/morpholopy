@@ -68,6 +68,27 @@ for type in ["neutral", "HI", "H2"]:
                 "x units": "Msun/pc**2",
                 "y units": "Msun/yr/kpc**2",
             }
+for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
+    medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"] = {
+        "number of bins x": 20,
+        "log x": True,
+        "range in x": [-1.0, 4.0],
+        "number of bins y": 100,
+        "log y": True,
+        "range in y": [-8.0, 1.0],
+        "x units": "Msun/pc**2",
+        "y units": "dimensionless",
+    }
+    medians[f"H2_to_HI_vs_neutral_spatial_{Zmask}"] = {
+        "number of bins x": 20,
+        "log x": True,
+        "range in x": [-1.0, 4.0],
+        "number of bins y": 100,
+        "log y": True,
+        "range in y": [-2.0, 3.0],
+        "x units": "Msun/pc**2",
+        "y units": "dimensionless",
+    }
 
 median_data_fields = []
 for median in medians:
@@ -385,6 +406,22 @@ def process_galaxy(args):
             vmask = mask & (tgas > 0.0) & (sigma > 0.0)
             galaxy_data.accumulate_median_data(
                 f"sigma_{name}_tgas_spatial_{Zmask}", sigma[vmask], tgas[vmask]
+            )
+
+    for sigma, name in [(sigma_neutral, "neutral"), (sigma_HI, "HI")]:
+        for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
+            if Zmask != "all":
+                Zmin = {"Zm1": -1.2, "Z0": -0.2, "Zp1": 0.6}[Zmask]
+                # we use a Zmax of 1000 as infinite upper limit
+                Zmax = {"Zm1": -0.8, "Z0": 0.2, "Zp1": 1000.0}[Zmask]
+                mask = (Zgas >= Zmin) & (Zgas < Zmax)
+            else:
+                mask = np.ones(sigma.shape, dtype=bool)
+            vmask = mask & (sigma_neutral > 0.0) & (sigma > 0.0)
+            galaxy_data.accumulate_median_data(
+                f"H2_to_{name}_vs_neutral_spatial_{Zmask}",
+                sigma_neutral[vmask],
+                sigma_H2[vmask] / sigma[vmask],
             )
 
     (

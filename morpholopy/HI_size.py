@@ -6,6 +6,8 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as pl
+from velociraptor.observations import load_observations
+import glob
 
 make_plots = False
 
@@ -216,39 +218,37 @@ def plot_HI_size_mass(
     output_path, observational_data_path, name_list, all_galaxies_list
 ):
 
-    fit_slope = 0.501
-    fit_intercept = -3.252
-    fit_intercept_sigma_low = 0.074
-    fit_intercept_sigma_high = 0.073
+    fig, ax = pl.subplots(1, 1)
 
-    logMfit = np.array([6.5, 12.0])
-    pl.fill_between(
-        10.0 ** logMfit,
-        10.0 ** (fit_slope * logMfit + fit_intercept - fit_intercept_sigma_low),
-        10.0 ** (fit_slope * logMfit + fit_intercept + fit_intercept_sigma_high),
-        alpha=0.1,
-        color="k",
-    )
-    pl.plot(
-        10.0 ** logMfit,
-        10.0 ** (fit_slope * logMfit + fit_intercept),
-        "--",
-        color="k",
-        label="Rajohnson et al. (2022)",
-    )
-
+    sim_lines = []
+    sim_labels = []
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
-        pl.loglog(data["HI_mass"], data["HI_size"], "o", color=f"C{i}", label=name)
+        HI_mass = unyt.unyt_array(data["HI_mass"], "Msun")
+        HI_mass.name = "HI Mass"
+        HI_size = unyt.unyt_array(data["HI_size"], "kpc")
+        HI_size.name = "HI Size"
 
-    pl.xlabel("M$_{\\rm{}HI}$ (M$_\\odot$)")
-    pl.ylabel("D$_{\\rm{}HI}$ (kpc)")
+        with unyt.matplotlib_support:
+            line = ax.loglog(HI_mass, HI_size, "o", color=f"C{i}")[0]
+            sim_lines.append(line)
+            sim_labels.append(name)
 
-    pl.legend(loc="best")
+    observational_data = load_observations(
+        sorted(glob.glob(f"{observational_data_path}/GalaxyHISizeMass/*.hdf5"))
+    )
+    with unyt.matplotlib_support:
+        for obs_data in observational_data:
+            obs_data.plot_on_axes(ax)
 
-    pl.tight_layout()
+    sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+    ax.legend(loc="lower right")
+    ax.add_artist(sim_legend)
+    ax.set_xlim(1.0e6, 1.0e12)
+    ax.set_ylim(1.0, 1.0e3)
+
     outputname = "HI_size_mass.png"
     pl.savefig(f"{output_path}/{outputname}", dpi=200)
-    pl.close()
+    pl.close(fig)
 
     return {
         "HI sizes": {

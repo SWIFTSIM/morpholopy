@@ -232,7 +232,6 @@ def plot_KS_relations(
                 c=Mstar,
                 norm=matplotlib.colors.LogNorm(vmin=1.0e6, vmax=1.0e12),
                 marker=marker,
-                label=name,
             )
             cs_at = ax_at.scatter(
                 sigma_HI,
@@ -240,7 +239,6 @@ def plot_KS_relations(
                 c=Mstar,
                 norm=matplotlib.colors.LogNorm(vmin=1.0e6, vmax=1.0e12),
                 marker=marker,
-                label=name,
             )
             cs_mol = ax_mol.scatter(
                 sigma_H2,
@@ -248,21 +246,40 @@ def plot_KS_relations(
                 c=Mstar,
                 norm=matplotlib.colors.LogNorm(vmin=1.0e6, vmax=1.0e12),
                 marker=marker,
-                label=name,
             )
 
     fig_neut.colorbar(cs_neut, label=f"{Mstar.name} [${Mstar.units.latex_repr}$]")
     fig_at.colorbar(cs_at, label=f"{Mstar.name} [${Mstar.units.latex_repr}$]")
     fig_mol.colorbar(cs_mol, label=f"{Mstar.name} [${Mstar.units.latex_repr}$]")
 
+    for dataname, ax in [
+        ("IntegratedNeutralKSRelation", ax_neut),
+        ("IntegratedAtomicKSRelation", ax_at),
+        ("IntegratedMolecularKSRelation", ax_mol),
+    ]:
+        observational_data = load_observations(
+            sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
+        )
+        with unyt.matplotlib_support:
+            for obs_data in observational_data:
+                obs_data.plot_on_axes(ax)
+
     for ax in [ax_neut, ax_at, ax_mol]:
+        sim_lines = []
+        sim_labels = []
+        for i, name in enumerate(name_list):
+            marker = markers[i]
+            sim_lines.append(ax.plot([], [], marker=marker, color="k")[0])
+            sim_labels.append(name)
         ax.grid(True)
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlim(1.0e-1, 1.0e4)
         ax.set_ylim(1.0e-6, 1.0e1)
         ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
-        ax.legend(loc="best")
+        sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+        ax.legend(loc="lower right")
+        ax.add_artist(sim_legend)
 
     neut_filename = "integrated_KS_neutral.png"
     fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
@@ -337,8 +354,8 @@ def plot_KS_relations(
                 ax_mol.loglog(x_mol, y_mol, linestyle, color=f"C{i}")
 
     for dataname, ax in [
-        ("SpatiallyResolvedNeutralKSRelation", ax_neut),
-        ("SpatiallyResolvedMolecularKSRelation", ax_mol),
+        ("AzimuthallyAveragedNeutralKSRelation", ax_neut),
+        ("AzimuthallyAveragedMolecularKSRelation", ax_mol),
     ]:
         observational_data = load_observations(
             sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
@@ -390,11 +407,9 @@ def plot_KS_relations(
                 " neutral gas and the Y axis shows the star formation rate surface"
                 " density. The surface densities were calculated using the"
                 " azimuthally-averaging method with a radial width of 750pc."
-                " Coloured lines show in the median relations considering only"
-                " cells with fixed metallicity (as indicated in the legends)."
-                " The grey solid line shows the median relation for all pixels,"
-                " whereas the black solid line shows the relation only for pixels"
-                " that have SFR surface density >0."
+                " Full lines show the median relation for all cells, while"
+                " different line styles only include cells with a fixed"
+                " metallicity (as indicated in the legend)."
             ),
         },
         at_filename: {
@@ -405,11 +420,9 @@ def plot_KS_relations(
                 " atomic gas and the Y axis shows the star formation rate"
                 " surface density. The surface densities were calculated using"
                 " the azimuthally-averaging method with a radial width of 750pc."
-                " Coloured lines show in the median relations considering only"
-                " cells with fixed metallicity (as indicated in the legends)."
-                " The grey solid line shows the median relation for all pixels,"
-                " whereas the black solid line shows the relation only for pixels"
-                " that have SFR surface density >0."
+                " Full lines show the median relation for all cells, while"
+                " different line styles only include cells with a fixed"
+                " metallicity (as indicated in the legend)."
             ),
         },
         mol_filename: {
@@ -420,11 +433,9 @@ def plot_KS_relations(
                 " molecular gas and the Y axis shows the star formation rate"
                 " surface density. The surface densities were calculated using"
                 " the azimuthally-averaging method with a radial width of 750pc."
-                " Coloured lines show in the median relations considering only"
-                " cells with fixed metallicity (as indicated in the legends)."
-                " The grey solid line shows the median relation for all pixels,"
-                " whereas the black solid line shows the relation only for pixels"
-                " that have SFR surface density >0."
+                " Full lines show the median relation for all cells, while"
+                " different line styles only include cells with a fixed"
+                " metallicity (as indicated in the legend)."
             ),
         },
     }
@@ -513,47 +524,41 @@ def plot_KS_relations(
                 "title": "Neutral KS relation (spatially averaged)",
                 "caption": (
                     "Combined spatially resolved measurements from N most massive"
-                    " individual galaxies, coloured by the mean metallicity of the"
-                    " resolved pixel. The X axis shows the surface density of neutral"
+                    " individual galaxies. The X axis shows the surface density of neutral"
                     " gas and the Y axis shows the star formation rate surface density."
                     " The surface densities were calculated using the grid method with"
-                    " a pixel size of 750pc. Coloured lines show in the median relations"
-                    " considering only cells with fixed metallicity (as indicated in"
-                    " the legends). The grey solid line shows the median relation for"
-                    " all pixels, whereas the black solid line shows the relation only"
-                    " for pixels that have SFR surface density >0."
+                    " a pixel size of 750pc."
+                    " Full lines show the median relation for all cells, while"
+                    " different line styles only include cells with a fixed"
+                    " metallicity (as indicated in the legend)."
                 ),
             },
             at_filename: {
                 "title": "Atomic KS relation (spatially averaged)",
                 "caption": (
                     "Combined spatially resolved measurements from N most massive"
-                    " individual galaxies, coloured by the mean metallicity of the"
-                    " resolved pixel. The X axis shows the surface density of"
+                    " individual galaxies."
+                    " The X axis shows the surface density of"
                     " atomic gas and the Y axis shows the star formation rate"
                     " surface density. The surface densities were calculated using"
-                    " the grid method with a pixel size of 750pc. Coloured lines"
-                    " show in the median relations considering only cells with fixed"
-                    " metallicity (as indicated in the legends). The grey solid line"
-                    " shows the median relation for all pixels, whereas the black"
-                    " solid line shows the relation only for pixels that have SFR"
-                    " surface density >0."
+                    " the grid method with a pixel size of 750pc."
+                    " Full lines show the median relation for all cells, while"
+                    " different line styles only include cells with a fixed"
+                    " metallicity (as indicated in the legend)."
                 ),
             },
             mol_filename: {
                 "title": "Molecular KS relation (spatially averaged)",
                 "caption": (
                     "Combined spatially resolved measurements from N most massive"
-                    " individual galaxies, coloured by the mean metallicity of the"
-                    " resolved pixel. The X axis shows the surface density of"
+                    " individual galaxies."
+                    " The X axis shows the surface density of"
                     " molecular gas and the Y axis shows the star formation rate"
                     " surface density. The surface densities were calculated using"
-                    " the grid method with a pixel size of 750pc. Coloured lines"
-                    " show in the median relations considering only cells with fixed"
-                    " metallicity (as indicated in the legends). The grey solid line"
-                    " shows the median relation for all pixels, whereas the black"
-                    " solid line shows the relation only for pixels that have SFR"
-                    " surface density >0."
+                    " the grid method with a pixel size of 750pc."
+                    " Full lines show the median relation for all cells, while"
+                    " different line styles only include cells with a fixed"
+                    " metallicity (as indicated in the legend)."
                 ),
             },
         }
@@ -625,42 +630,135 @@ def plot_KS_relations(
                 "title": "Neutral gas depletion time (spatially averaged)",
                 "caption": (
                     "Depletion time of neutral gas vs. neutral gas surface density"
-                    " from N most massive individual galaxies, coloured by the mean"
-                    " metallicity of the resolved pixel. The surface densities were"
-                    " calculated using a grid with pixel size of 750 pc. Coloured"
-                    " lines show in the median relations considering only cells with"
-                    " fixed metallicity (as indicated in the legends). The grey solid"
-                    " line shows the median relation for all pixels, whereas the black"
-                    " solid line shows the relation only for pixels that have SFR"
-                    " surface density >0."
+                    " from N most massive individual galaxies."
+                    " The surface densities were"
+                    " calculated using a grid with pixel size of 750 pc."
+                    " Full lines show the median relation for all cells, while"
+                    " different line styles only include cells with a fixed"
+                    " metallicity (as indicated in the legend)."
                 ),
             },
             at_filename: {
                 "title": "Atomic gas depletion time (spatially averaged)",
                 "caption": (
                     "Depletion time of atomic gas vs. atomic gas surface density"
-                    " from N most massive individual galaxies, coloured by the mean"
-                    " metallicity of the resolved pixel. The surface densities were"
-                    " calculated using a grid with pixel size of 750 pc. Coloured"
-                    " lines show in the median relations considering only cells with"
-                    " fixed metallicity (as indicated in the legends). The grey solid"
-                    " line shows the median relation for all pixels, whereas the black"
-                    " solid line shows the relation only for pixels that have SFR"
-                    " surface density >0."
+                    " from N most massive individual galaxies."
+                    " The surface densities were"
+                    " calculated using a grid with pixel size of 750 pc."
+                    " Full lines show the median relation for all cells, while"
+                    " different line styles only include cells with a fixed"
+                    " metallicity (as indicated in the legend)."
                 ),
             },
             mol_filename: {
                 "title": "Molecular gas depletion time (spatially averaged)",
                 "caption": (
                     "Depletion time of molecular gas vs. molecular gas surface density"
-                    " from N most massive individual galaxies, coloured by the mean"
-                    " metallicity of the resolved pixel. The surface densities were"
-                    " calculated using a grid with pixel size of 750 pc. Coloured"
-                    " lines show in the median relations considering only cells with"
-                    " fixed metallicity (as indicated in the legends). The grey solid"
-                    " line shows the median relation for all pixels, whereas the black"
-                    " solid line shows the relation only for pixels that have SFR"
-                    " surface density >0."
+                    " from N most massive individual galaxies."
+                    " The surface densities were"
+                    " calculated using a grid with pixel size of 750 pc."
+                    " Full lines show the median relation for all cells, while"
+                    " different line styles only include cells with a fixed"
+                    " metallicity (as indicated in the legend)."
+                ),
+            },
+        }
+    )
+
+    fig_neut, ax_neut = pl.subplots(1, 1)
+    fig_at, ax_at = pl.subplots(1, 1)
+
+    for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        for Zmask, linestyle in [
+            ("all", "-"),
+            ("Zm1", "--"),
+            ("Z0", ":"),
+            ("Zp1", "-."),
+        ]:
+            med_neut = data.medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"]
+            med_at = data.medians[f"H2_to_HI_vs_neutral_spatial_{Zmask}"]
+
+            x_neut = unyt.unyt_array(med_neut["x centers"], med_neut["x units"])
+            x_neut.name = "Neutral Gas Surface Density"
+            y_neut = unyt.unyt_array(med_neut["y values"], med_neut["y units"])
+            y_neut.name = "Molecular to Neutral Gas Surface Density"
+            x_at = unyt.unyt_array(med_neut["x centers"], med_neut["x units"])
+            x_at.name = "Neutral Gas Surface Density"
+            y_at = unyt.unyt_array(med_neut["y values"], med_neut["y units"])
+            y_at.name = "Molecular to Atomic Gas Surface Density"
+
+            label = name if Zmask == "all" else None
+            with unyt.matplotlib_support:
+                ax_neut.loglog(x_neut, y_neut, linestyle, color=f"C{i}")
+                ax_at.loglog(x_at, y_at, linestyle, color=f"C{i}")
+
+    for dataname, ax in [("NeutralGasSurfaceDensityMolecularToAtomicRatio", ax_at)]:
+        observational_data = load_observations(
+            sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
+        )
+        with unyt.matplotlib_support:
+            for obs_data in observational_data:
+                obs_data.plot_on_axes(ax)
+
+    for ax in [ax_neut, ax_at]:
+        sim_lines = []
+        sim_labels = []
+        for i, (name, _) in enumerate(zip(name_list, all_galaxies_list)):
+            sim_lines.append(ax.plot([], [], "-", color=f"C{i}")[0])
+            sim_labels.append(name)
+        for Zlabel, linestyle in [
+            ("all", "-"),
+            ("$\\log_{10} Z/Z_\\odot = -1$", "--"),
+            ("$\\log_{10} Z/Z_\\odot = 0$", ":"),
+            ("$\\log_{10} Z/Z_\\odot = 1$", "-."),
+        ]:
+            sim_lines.append(ax.plot([], [], linestyle, color="k")[0])
+            sim_labels.append(Zlabel)
+        ax.grid(True)
+        ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
+        sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+        ax.legend(loc="lower right")
+        ax.add_artist(sim_legend)
+
+    ax_neut.set_xlim(1.0e-1, 1.0e4)
+    ax_neut.set_ylim(1.0e-8, 1.0)
+    ax_at.set_xlim(1.0e-1, 1.0e4)
+    ax_at.set_ylim(1.0e-2, 1.0e3)
+
+    neut_filename = "H2_to_neutral_vs_neutral_spatial.png"
+    fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
+    pl.close(fig_neut)
+
+    at_filename = "H2_to_HI_vs_neutral_spatial.png"
+    fig_at.savefig(f"{output_path}/{at_filename}", dpi=300)
+    pl.close(fig_at)
+
+    plots["Combined surface densities"].update(
+        {
+            neut_filename: {
+                "title": "H2 to Neutral as a function of Neutral Surface Density (spatially averaged)",
+                "caption": (
+                    "Ratio of the molecular and neutral surface density as a"
+                    " function of the neutral surface density"
+                    " for individual galaxies."
+                    " The surface densities were"
+                    " calculated using a grid with pixel size of 750 pc."
+                    " Full lines show the median relation for all cells, while"
+                    " different line styles only include cells with a fixed"
+                    " metallicity (as indicated in the legend)."
+                ),
+            },
+            at_filename: {
+                "title": "H2 to HI as a function of Neutral Surface Density (spatially averaged)",
+                "caption": (
+                    "Ratio of the molecular and atomic surface density as a"
+                    " function of the neutral surface density"
+                    " for individual galaxies."
+                    " The surface densities were"
+                    " calculated using a grid with pixel size of 750 pc."
+                    " Full lines show the median relation for all cells, while"
+                    " different line styles only include cells with a fixed"
+                    " metallicity (as indicated in the legend)."
                 ),
             },
         }
