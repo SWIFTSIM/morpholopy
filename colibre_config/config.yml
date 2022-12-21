@@ -9,7 +9,7 @@ mass_variable_stars: apertures.mass_star_30_kpc
 mass_limit_gas_in_Msun: 0.
 mass_variable_gas: apertures.mass_gas_30_kpc
 
-plotting_lower_mass_limit_in_Msun: 1.e11
+plotting_lower_mass_limit_in_Msun: 1.e10
 plotting_upper_mass_limit_in_Msun: 1.e12
 plotting_number_of_galaxies: 10
 plotting_random_seed: 42

@@ -19,6 +19,7 @@ text.usetex: False
 # Legend options
 legend.frameon: False
 legend.fontsize: 6
+legend.handlelength: 5.0
 
 # Figure options for publications
 figure.dpi: 300

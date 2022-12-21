@@ -117,7 +117,7 @@ parser.add_argument(
 )
 
 
-def init_child_process(env, temp_folder):
+def init_child_process(env, temp_folder, stylesheet_path):
     """
     Matplotlib with LaTeX support is not safe to use in parallel.
     The reason is that Matplotlib saves some intermediary files in a temporary
@@ -132,6 +132,13 @@ def init_child_process(env, temp_folder):
     """
     env["MPLCONFIGDIR"] = f"{temp_folder}/temp_folder_pid_{mp.current_process().pid}"
     os.environ = env
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as pl
+
+    pl.style.use(stylesheet_path)
 
 
 if __name__ == "__main__":
@@ -176,6 +183,7 @@ if __name__ == "__main__":
 
     config = MorphologyConfig(config_directory=args.config)
 
+    stylesheet_path = None
     if config.matplotlib_stylesheet != "default":
         stylesheet_path = f"{config.config_directory}/{config.matplotlib_stylesheet}"
         pl.style.use(stylesheet_path)
@@ -245,6 +253,7 @@ if __name__ == "__main__":
                 halo_catalogue_filename,
                 snapshot_filename,
                 args.output,
+                observational_data_path,
                 config.orientation_method,
                 make_plots,
                 main_log,
@@ -253,6 +262,8 @@ if __name__ == "__main__":
                 zip(filtered_catalogue.galaxy_indices, filtered_catalogue.plot_galaxy)
             )
         ]
+
+        arglist = sorted(arglist, key=lambda x: x[7], reverse=True)
 
         # determine the appropriate number of parallel processes to use
         num_proc = args.num_of_cpus
@@ -270,7 +281,9 @@ if __name__ == "__main__":
         )
         parent_env = os.environ.copy()
         pool = mp.Pool(
-            num_proc, initializer=init_child_process, initargs=(parent_env, tmpdir)
+            num_proc,
+            initializer=init_child_process,
+            initargs=(parent_env, tmpdir, stylesheet_path),
         )
         galaxy_count = 0
         for index, galaxy_data, images in pool.imap_unordered(process_galaxy, arglist):
@@ -282,16 +295,18 @@ if __name__ == "__main__":
             all_galaxies[index] = galaxy_data
             if images is not None:
                 main_log.debug(f"Adding figures for galaxy {index}")
-                all_images[f"ZZZ - Galaxy {index}"] = images
+                all_images.update(images)
         pool.close()
         pool.join()
 
+        main_log.debug("Creating metadata output file")
         # save plot data using the given metadata name
         metadata_filename = (
             f"{args.input[0]}/{args.metadata}_{args.snapshots[0][-9:-5]}.yml"
         )
         all_galaxies.output(metadata_filename)
 
+        main_log.debug("Regenerating metadata from output file")
         # regenerate the data from the file, for consistency with the comparison case
         all_galaxies_list = [AllGalaxyData.fromfile(metadata_filename)]
     else:
@@ -301,11 +316,13 @@ if __name__ == "__main__":
             for input, snapshot in zip(args.input, args.snapshots)
         ]
 
+        main_log.debug("Regenerating metadata from files")
         # recreate data from metadata files
         all_galaxies_list = [
             AllGalaxyData.fromfile(filename) for filename in metadata_filenames
         ]
 
+    main_log.debug("Making global plots")
     all_images.update(
         plot_HI_size_mass(
             args.output, observational_data_path, run_names, all_galaxies_list
@@ -324,6 +341,7 @@ if __name__ == "__main__":
 
     config.add_images(all_images)
 
+    main_log.debug("Creating webpage")
     # Create the webpage
     webpage = WebpageCreator()
     webpage.add_config_metadata(config=config, is_comparison=is_comparison)

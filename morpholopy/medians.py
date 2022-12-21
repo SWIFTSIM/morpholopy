@@ -2,6 +2,8 @@ import numpy as np
 import unyt
 import matplotlib
 
+from .plot import plot_broken_line_on_axis
+
 
 def accumulate_median_data(median, values_x, values_y):
 
@@ -77,7 +79,7 @@ def compute_median(median, median_data):
     return xbin_centres, ymedian
 
 
-def plot_median_on_axis_as_line(ax, median, color, linestyle="-"):
+def plot_median_on_axis_as_line(ax, median, color, linestyle="-", marker="o"):
 
     x = unyt.unyt_array(median["x centers"], median["x units"])
     x.name = median.get("x label")
@@ -86,7 +88,9 @@ def plot_median_on_axis_as_line(ax, median, color, linestyle="-"):
 
     line = None
     with unyt.matplotlib_support:
-        line = ax.plot(x, y, linestyle=linestyle, color=color)[0]
+        line = plot_broken_line_on_axis(
+            ax, x, y, linestyle=linestyle, marker=marker, color=color
+        )
 
     xlims = median["range in x"]
     if median["log x"]:

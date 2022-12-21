@@ -7,6 +7,7 @@ from .orientation import (
     get_mass_position_velocity_nomask,
     get_orientation_mask_radius,
 )
+from .plot import plot_data_on_axis
 import matplotlib
 
 matplotlib.use("Agg")
@@ -191,6 +192,8 @@ def plot_morphology(output_path, observational_data_path, name_list, all_galaxie
     fig_gas, ax_gas = pl.subplots(1, 1)
     fig_star, ax_star = pl.subplots(1, 1)
 
+    sim_lines = []
+    sim_labels = []
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
         Mstar = unyt.unyt_array(data["stellar_mass"], unyt.Msun).in_base("galactic")
         Mstar.name = "Stellar Mass"
@@ -199,9 +202,14 @@ def plot_morphology(output_path, observational_data_path, name_list, all_galaxie
         jgas = unyt.unyt_array(data["gas_momentum"], unyt.kpc * unyt.km / unyt.s)
         jgas.name = "Gas Specific Angular Momentum"
 
-        with unyt.matplotlib_support:
-            ax_star.loglog(Mstar, jstar, ".", label=name)
-            ax_gas.loglog(Mstar, jgas, ".", label=name)
+        line = plot_data_on_axis(
+            ax_star, Mstar, jstar, color=f"C{i}", plot_scatter=(len(name_list) == 1)
+        )
+        sim_lines.append(line)
+        sim_labels.append(name)
+        line = plot_data_on_axis(
+            ax_gas, Mstar, jgas, color=f"C{i}", plot_scatter=(len(name_list) == 1)
+        )
 
     ax_star.set_title("Stellar component")
     ax_gas.set_title("HI+H2 gas")
@@ -210,7 +218,10 @@ def plot_morphology(output_path, observational_data_path, name_list, all_galaxie
         ax.set_xlim(1.0e6, 1.0e12)
         ax.set_ylim(0.1, 1.0e4)
         ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
-        ax.legend(loc="best")
+        sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+        # uncomment this if observational data is added
+        # ax.legend(loc="lower right")
+        ax.add_artist(sim_legend)
 
     jgas_filename = "specific_angular_momentum_gas.png"
     fig_gas.savefig(f"{output_path}/{jgas_filename}", dpi=300)
@@ -240,6 +251,8 @@ def plot_morphology(output_path, observational_data_path, name_list, all_galaxie
     fig_gas, ax_gas = pl.subplots(1, 1)
     fig_star, ax_star = pl.subplots(1, 1)
 
+    sim_lines = []
+    sim_labels = []
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
         Mstar = unyt.unyt_array(data["stellar_mass"], unyt.Msun).in_base("galactic")
         Mstar.name = "Stellar Mass"
@@ -248,9 +261,24 @@ def plot_morphology(output_path, observational_data_path, name_list, all_galaxie
         kappa_gas = unyt.unyt_array(data["gas_kappa_co"], unyt.dimensionless)
         kappa_gas.name = "Gas Kappa Corot"
 
-        with unyt.matplotlib_support:
-            ax_star.semilogx(Mstar, kappa_star, ".", label=name)
-            ax_gas.semilogx(Mstar, kappa_gas, ".", label=name)
+        line = plot_data_on_axis(
+            ax_star,
+            Mstar,
+            kappa_star,
+            color=f"C{i}",
+            plot_scatter=(len(name_list) == 1),
+            log_y=False,
+        )
+        sim_lines.append(line)
+        sim_labels.append(name)
+        line = plot_data_on_axis(
+            ax_gas,
+            Mstar,
+            kappa_gas,
+            color=f"C{i}",
+            plot_scatter=(len(name_list) == 1),
+            log_y=False,
+        )
 
     ax_star.set_title("Stellar component")
     ax_gas.set_title("HI+H2 gas")
@@ -259,7 +287,10 @@ def plot_morphology(output_path, observational_data_path, name_list, all_galaxie
         ax.set_xlim(1.0e6, 1.0e12)
         ax.set_ylim(0.0, 1.0)
         ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
-        ax.legend(loc="best")
+        sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+        # uncomment this if observational data is added
+        # ax.legend(loc="lower right")
+        ax.add_artist(sim_legend)
 
     kappa_gas_filename = "kappa_corot_gas.png"
     fig_gas.savefig(f"{output_path}/{kappa_gas_filename}", dpi=300)
@@ -291,6 +322,8 @@ def plot_morphology(output_path, observational_data_path, name_list, all_galaxie
     fig_gas, ax_gas = pl.subplots(1, 3, figsize=(11, 3.5))
     fig_star, ax_star = pl.subplots(1, 3, figsize=(11, 3.5))
 
+    sim_lines = []
+    sim_labels = []
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
         Mstar = unyt.unyt_array(data["stellar_mass"], unyt.Msun).in_base("galactic")
         Mstar.name = "Stellar Mass"
@@ -302,9 +335,25 @@ def plot_morphology(output_path, observational_data_path, name_list, all_galaxie
             ratio_gas = unyt.unyt_array(data[f"gas_{dname}"], unyt.dimensionless)
             ratio_gas.name = f"Gas {dlabel}"
 
-            with unyt.matplotlib_support:
-                ax_star[j].semilogx(Mstar, ratio_star, ".", label=name)
-                ax_gas[j].semilogx(Mstar, ratio_gas, ".", label=name)
+            line = plot_data_on_axis(
+                ax_star[j],
+                Mstar,
+                ratio_star,
+                color=f"C{i}",
+                plot_scatter=(len(name_list) == 1),
+                log_y=False,
+            )
+            if j == 0:
+                sim_lines.append(line)
+                sim_labels.append(name)
+            line = plot_data_on_axis(
+                ax_gas[j],
+                Mstar,
+                ratio_gas,
+                color=f"C{i}",
+                plot_scatter=(len(name_list) == 1),
+                log_y=False,
+            )
 
     ax_star[1].set_title("Stellar component")
     ax_gas[1].set_title("HI+H2 gas")
@@ -313,7 +362,10 @@ def plot_morphology(output_path, observational_data_path, name_list, all_galaxie
         ax.set_xlim(1.0e6, 1.0e12)
         ax.set_ylim(0.0, 1.0)
         ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
-        ax.legend(loc="best")
+        sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+        # uncomment this if observational data is added
+        # ax.legend(loc="lower right")
+        ax.add_artist(sim_legend)
 
     ratio_gas_filename = "axis_ratios_gas.png"
     fig_gas.savefig(f"{output_path}/{ratio_gas_filename}", dpi=300)

@@ -11,6 +11,16 @@ import glob
 
 from .medians import plot_median_on_axis_as_line, plot_median_on_axis_as_pdf
 
+# markers used to distinguish different simulations in integrated plots
+markers = ["o", "s", "^", "D", "v"]
+# labels and line styles for different metallicity cuts
+metallicities = [
+    ("all", "all", "-", "o"),
+    ("Zm1", "$\\log_{10} Z/Z_\\odot = -1$", "--", "s"),
+    ("Z0", "$\\log_{10} Z/Z_\\odot = 0$", ":", "^"),
+    ("Zp1", "$\\log_{10} Z/Z_\\odot = 1$", (0, (3, 2, 1, 2)), "D"),
+]
+
 make_plots = False
 Zsolar = 0.0134
 
@@ -216,161 +226,176 @@ def calculate_integrated_surface_densities(data, face_on_rmatrix, gas_mask, radi
 
 
 def plot_KS_relations(
-    output_path, observational_data_path, name_list, all_galaxies_list
+    output_path,
+    observational_data_path,
+    name_list,
+    all_galaxies_list,
+    prefix="",
+    always_plot_scatter=False,
+    plot_integrated_quantities=True,
 ):
 
     plots = {}
 
-    fig_neut, ax_neut = pl.subplots(1, 1)
-    fig_at, ax_at = pl.subplots(1, 1)
-    fig_mol, ax_mol = pl.subplots(1, 1)
+    if plot_integrated_quantities:
+        fig_neut, ax_neut = pl.subplots(1, 1)
+        fig_at, ax_at = pl.subplots(1, 1)
+        fig_mol, ax_mol = pl.subplots(1, 1)
 
-    markers = ["o", "s", "^", "D", "v"]
-    if len(name_list) > len(markers):
-        raise RuntimeError(
-            f"Not enough markers to plot {len(name_list)} different simulations!"
-        )
-    cs_neut = None
-    cs_at = None
-    cs_mol = None
-    for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
-        marker = markers[i]
-        Mstar = unyt.unyt_array(data["stellar_mass"], unyt.Msun).in_base("galactic")
-        Mstar.name = f"Stellar Mass"
-        sigma_neutral = unyt.unyt_array(data["sigma_neutral"], "Msun/pc**2")
-        sigma_neutral.name = "Neutral Gas Surface Density"
-        sigma_HI = unyt.unyt_array(data["sigma_HI"], "Msun/pc**2")
-        sigma_HI.name = "Atomic Gas Surface Density"
-        sigma_H2 = unyt.unyt_array(data["sigma_H2"], "Msun/pc**2")
-        sigma_H2.name = "Molecular Gas Surface Density"
-        sigma_SFR = unyt.unyt_array(data["sigma_SFR"], "Msun/yr/kpc**2")
-        sigma_SFR.name = "Star Formation Rate Surface Density"
-
-        with unyt.matplotlib_support:
-            cs_neut = ax_neut.scatter(
-                sigma_neutral,
-                sigma_SFR,
-                c=Mstar,
-                norm=matplotlib.colors.LogNorm(vmin=1.0e6, vmax=1.0e12),
-                marker=marker,
+        if len(name_list) > len(markers):
+            raise RuntimeError(
+                f"Not enough markers to plot {len(name_list)} different simulations!"
             )
-            cs_at = ax_at.scatter(
-                sigma_HI,
-                sigma_SFR,
-                c=Mstar,
-                norm=matplotlib.colors.LogNorm(vmin=1.0e6, vmax=1.0e12),
-                marker=marker,
-            )
-            cs_mol = ax_mol.scatter(
-                sigma_H2,
-                sigma_SFR,
-                c=Mstar,
-                norm=matplotlib.colors.LogNorm(vmin=1.0e6, vmax=1.0e12),
-                marker=marker,
-            )
-
-    fig_neut.colorbar(cs_neut, label=f"{Mstar.name} [${Mstar.units.latex_repr}$]")
-    fig_at.colorbar(cs_at, label=f"{Mstar.name} [${Mstar.units.latex_repr}$]")
-    fig_mol.colorbar(cs_mol, label=f"{Mstar.name} [${Mstar.units.latex_repr}$]")
-
-    for dataname, ax in [
-        ("IntegratedNeutralKSRelation", ax_neut),
-        ("IntegratedAtomicKSRelation", ax_at),
-        ("IntegratedMolecularKSRelation", ax_mol),
-    ]:
-        observational_data = load_observations(
-            sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
-        )
-        with unyt.matplotlib_support:
-            for obs_data in observational_data:
-                obs_data.plot_on_axes(ax)
-
-    for ax in [ax_neut, ax_at, ax_mol]:
-        sim_lines = []
-        sim_labels = []
-        for i, name in enumerate(name_list):
+        cs_neut = None
+        cs_at = None
+        cs_mol = None
+        for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
             marker = markers[i]
-            sim_lines.append(
-                ax.plot([], [], marker=marker, color="k", linestyle="None")[0]
+            Mstar = unyt.unyt_array(data["stellar_mass"], unyt.Msun).in_base("galactic")
+            Mstar.name = f"Stellar Mass"
+            sigma_neutral = unyt.unyt_array(data["sigma_neutral"], "Msun/pc**2")
+            sigma_neutral.name = "Neutral Gas Surface Density"
+            sigma_HI = unyt.unyt_array(data["sigma_HI"], "Msun/pc**2")
+            sigma_HI.name = "Atomic Gas Surface Density"
+            sigma_H2 = unyt.unyt_array(data["sigma_H2"], "Msun/pc**2")
+            sigma_H2.name = "Molecular Gas Surface Density"
+            sigma_SFR = unyt.unyt_array(data["sigma_SFR"], "Msun/yr/kpc**2")
+            sigma_SFR.name = "Star Formation Rate Surface Density"
+
+            with unyt.matplotlib_support:
+                cs_neut = ax_neut.scatter(
+                    sigma_neutral,
+                    sigma_SFR,
+                    c=Mstar,
+                    norm=matplotlib.colors.LogNorm(vmin=1.0e6, vmax=1.0e12),
+                    marker=marker,
+                )
+                cs_at = ax_at.scatter(
+                    sigma_HI,
+                    sigma_SFR,
+                    c=Mstar,
+                    norm=matplotlib.colors.LogNorm(vmin=1.0e6, vmax=1.0e12),
+                    marker=marker,
+                )
+                cs_mol = ax_mol.scatter(
+                    sigma_H2,
+                    sigma_SFR,
+                    c=Mstar,
+                    norm=matplotlib.colors.LogNorm(vmin=1.0e6, vmax=1.0e12),
+                    marker=marker,
+                )
+
+        fig_neut.colorbar(cs_neut, label=f"{Mstar.name} [${Mstar.units.latex_repr}$]")
+        fig_at.colorbar(cs_at, label=f"{Mstar.name} [${Mstar.units.latex_repr}$]")
+        fig_mol.colorbar(cs_mol, label=f"{Mstar.name} [${Mstar.units.latex_repr}$]")
+
+        for dataname, ax in [
+            ("IntegratedNeutralKSRelation", ax_neut),
+            ("IntegratedAtomicKSRelation", ax_at),
+            ("IntegratedMolecularKSRelation", ax_mol),
+        ]:
+            observational_data = load_observations(
+                sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
             )
-            sim_labels.append(name)
-        ax.grid(True)
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-        ax.set_xlim(1.0e-1, 1.0e4)
-        ax.set_ylim(1.0e-6, 1.0e1)
-        ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
-        sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
-        ax.legend(loc="lower right")
-        ax.add_artist(sim_legend)
+            with unyt.matplotlib_support:
+                for obs_data in observational_data:
+                    obs_data.plot_on_axes(ax)
 
-    neut_filename = "integrated_KS_neutral.png"
-    fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
-    pl.close(fig_neut)
+        for ax in [ax_neut, ax_at, ax_mol]:
+            sim_lines = []
+            sim_labels = []
+            for i, name in enumerate(name_list):
+                marker = markers[i]
+                sim_lines.append(
+                    ax.plot([], [], marker=marker, color="k", linestyle="None")[0]
+                )
+                sim_labels.append(name)
+            ax.grid(True)
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+            ax.set_xlim(1.0e-1, 1.0e4)
+            ax.set_ylim(1.0e-6, 1.0e1)
+            ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
+            sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+            ax.legend(loc="lower right")
+            ax.add_artist(sim_legend)
 
-    at_filename = "integrated_KS_atomic.png"
-    fig_at.savefig(f"{output_path}/{at_filename}", dpi=300)
-    pl.close(fig_at)
+        neut_filename = f"{prefix}integrated_KS_neutral.png"
+        fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
+        pl.close(fig_neut)
 
-    mol_filename = "integrated_KS_molecular.png"
-    fig_mol.savefig(f"{output_path}/{mol_filename}", dpi=300)
-    pl.close(fig_mol)
+        at_filename = f"{prefix}integrated_KS_atomic.png"
+        fig_at.savefig(f"{output_path}/{at_filename}", dpi=300)
+        pl.close(fig_at)
 
-    plots["Integrated surface densities"] = {
-        neut_filename: {
-            "title": "Integrated surface densities / Neutral Gas",
-            "caption": (
-                "Integrated surface densities of H2+HI gas and star-forming gas"
-                " for each individual galaxy. Quantities are calculated summing"
-                " up all gas (and SFR) within the galaxies' stellar half mass radius."
-            ),
-        },
-        at_filename: {
-            "title": "Integrated surface densities / Atomic Gas",
-            "caption": (
-                "Integrated surface densities of HI gas and star-forming gas for"
-                " each individual galaxy. Quantities are calculated summing up"
-                " all gas (and SFR) within the galaxies' stellar half mass radius."
-            ),
-        },
-        mol_filename: {
-            "title": "Integrated surface densities / Molecular Gas",
-            "caption": (
-                "Integrated surface densities of H2 gas and star-forming gas for"
-                " each individual galaxy. Quantities are calculated summing up"
-                " all gas (and SFR) within the galaxies' stellar half mass radius."
-            ),
-        },
-    }
+        mol_filename = f"{prefix}integrated_KS_molecular.png"
+        fig_mol.savefig(f"{output_path}/{mol_filename}", dpi=300)
+        pl.close(fig_mol)
+
+        plots["Integrated surface densities"] = {
+            neut_filename: {
+                "title": "Integrated surface densities / Neutral Gas",
+                "caption": (
+                    "Integrated surface densities of H2+HI gas and star-forming gas"
+                    " for each individual galaxy. Quantities are calculated summing"
+                    " up all gas (and SFR) within the galaxies' stellar half mass radius."
+                ),
+            },
+            at_filename: {
+                "title": "Integrated surface densities / Atomic Gas",
+                "caption": (
+                    "Integrated surface densities of HI gas and star-forming gas for"
+                    " each individual galaxy. Quantities are calculated summing up"
+                    " all gas (and SFR) within the galaxies' stellar half mass radius."
+                ),
+            },
+            mol_filename: {
+                "title": "Integrated surface densities / Molecular Gas",
+                "caption": (
+                    "Integrated surface densities of H2 gas and star-forming gas for"
+                    " each individual galaxy. Quantities are calculated summing up"
+                    " all gas (and SFR) within the galaxies' stellar half mass radius."
+                ),
+            },
+        }
 
     fig_neut, ax_neut = pl.subplots(1, 1)
     fig_at, ax_at = pl.subplots(1, 1)
     fig_mol, ax_mol = pl.subplots(1, 1)
 
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
-        for Zmask, linestyle in [
-            ("all", "-"),
-            ("Zm1", "--"),
-            ("Z0", ":"),
-            ("Zp1", "-."),
-        ]:
+        for Zmask, _, linestyle, marker in metallicities:
+            if Zmask == "all" and always_plot_scatter:
+                plot_median_on_axis_as_pdf(
+                    ax_neut, data.medians[f"sigma_neutral_SFR_azimuthal_{Zmask}"]
+                )
+                plot_median_on_axis_as_pdf(
+                    ax_at, data.medians[f"sigma_HI_SFR_azimuthal_{Zmask}"]
+                )
+                plot_median_on_axis_as_pdf(
+                    ax_mol, data.medians[f"sigma_H2_SFR_azimuthal_{Zmask}"]
+                )
+
             plot_median_on_axis_as_line(
                 ax_neut,
                 data.medians[f"sigma_neutral_SFR_azimuthal_{Zmask}"],
                 color=f"C{i}",
                 linestyle=linestyle,
+                marker=marker,
             )
             plot_median_on_axis_as_line(
                 ax_at,
                 data.medians[f"sigma_HI_SFR_azimuthal_{Zmask}"],
                 color=f"C{i}",
                 linestyle=linestyle,
+                marker=marker,
             )
             plot_median_on_axis_as_line(
                 ax_mol,
                 data.medians[f"sigma_H2_SFR_azimuthal_{Zmask}"],
                 color=f"C{i}",
                 linestyle=linestyle,
+                marker=marker,
             )
 
     for dataname, ax in [
@@ -390,13 +415,10 @@ def plot_KS_relations(
         for i, (name, _) in enumerate(zip(name_list, all_galaxies_list)):
             sim_lines.append(ax.plot([], [], "-", color=f"C{i}")[0])
             sim_labels.append(name)
-        for Zlabel, linestyle in [
-            ("all", "-"),
-            ("$\\log_{10} Z/Z_\\odot = -1$", "--"),
-            ("$\\log_{10} Z/Z_\\odot = 0$", ":"),
-            ("$\\log_{10} Z/Z_\\odot = 1$", "-."),
-        ]:
-            sim_lines.append(ax.plot([], [], linestyle, color="k")[0])
+        for _, Zlabel, linestyle, marker in metallicities:
+            sim_lines.append(
+                ax.plot([], [], linestyle=linestyle, marker=marker, color="k")[0]
+            )
             sim_labels.append(Zlabel)
         ax.grid(True)
         ax.set_xlim(1.0e-1, 1.0e4)
@@ -406,15 +428,15 @@ def plot_KS_relations(
         ax.legend(loc="lower right")
         ax.add_artist(sim_legend)
 
-    neut_filename = "azimuthal_KS_neutral.png"
+    neut_filename = f"{prefix}azimuthal_KS_neutral.png"
     fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
     pl.close(fig_neut)
 
-    at_filename = "azimuthal_KS_atomic.png"
+    at_filename = f"{prefix}azimuthal_KS_atomic.png"
     fig_at.savefig(f"{output_path}/{at_filename}", dpi=300)
     pl.close(fig_at)
 
-    mol_filename = "azimuthal_KS_molecular.png"
+    mol_filename = f"{prefix}azimuthal_KS_molecular.png"
     fig_mol.savefig(f"{output_path}/{mol_filename}", dpi=300)
     pl.close(fig_mol)
 
@@ -465,29 +487,37 @@ def plot_KS_relations(
     fig_mol, ax_mol = pl.subplots(1, 1)
 
     for i, (_, data) in enumerate(zip(name_list, all_galaxies_list)):
-        for Zmask, linestyle in [
-            ("all", "-"),
-            ("Zm1", "--"),
-            ("Z0", ":"),
-            ("Zp1", "-."),
-        ]:
+        for Zmask, _, linestyle, marker in metallicities:
+            if Zmask == "all" and always_plot_scatter:
+                plot_median_on_axis_as_pdf(
+                    ax_neut, data.medians[f"sigma_neutral_SFR_spatial_{Zmask}"]
+                )
+                plot_median_on_axis_as_pdf(
+                    ax_at, data.medians[f"sigma_HI_SFR_spatial_{Zmask}"]
+                )
+                plot_median_on_axis_as_pdf(
+                    ax_mol, data.medians[f"sigma_H2_SFR_spatial_{Zmask}"]
+                )
             plot_median_on_axis_as_line(
                 ax_neut,
                 data.medians[f"sigma_neutral_SFR_spatial_{Zmask}"],
                 color=f"C{i}",
                 linestyle=linestyle,
+                marker=marker,
             )
             plot_median_on_axis_as_line(
                 ax_at,
                 data.medians[f"sigma_HI_SFR_spatial_{Zmask}"],
                 color=f"C{i}",
                 linestyle=linestyle,
+                marker=marker,
             )
             plot_median_on_axis_as_line(
                 ax_mol,
                 data.medians[f"sigma_H2_SFR_spatial_{Zmask}"],
                 color=f"C{i}",
                 linestyle=linestyle,
+                marker=marker,
             )
 
     for dataname, ax in [
@@ -507,13 +537,10 @@ def plot_KS_relations(
         for i, (name, _) in enumerate(zip(name_list, all_galaxies_list)):
             sim_lines.append(ax.plot([], [], "-", color=f"C{i}")[0])
             sim_labels.append(name)
-        for Zlabel, linestyle in [
-            ("all", "-"),
-            ("$\\log_{10} Z/Z_\\odot = -1$", "--"),
-            ("$\\log_{10} Z/Z_\\odot = 0$", ":"),
-            ("$\\log_{10} Z/Z_\\odot = 1$", "-."),
-        ]:
-            sim_lines.append(ax.plot([], [], linestyle, color="k")[0])
+        for _, Zlabel, linestyle, marker in metallicities:
+            sim_lines.append(
+                ax.plot([], [], linestyle=linestyle, marker=marker, color="k")[0]
+            )
             sim_labels.append(Zlabel)
         ax.grid(True)
         ax.set_xlim(1.0e-1, 1.0e4)
@@ -523,15 +550,15 @@ def plot_KS_relations(
         ax.legend(loc="lower right")
         ax.add_artist(sim_legend)
 
-    neut_filename = "spatial_KS_neutral.png"
+    neut_filename = f"{prefix}spatial_KS_neutral.png"
     fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
     pl.close(fig_neut)
 
-    at_filename = "spatial_KS_atomic.png"
+    at_filename = f"{prefix}spatial_KS_atomic.png"
     fig_at.savefig(f"{output_path}/{at_filename}", dpi=300)
     pl.close(fig_at)
 
-    mol_filename = "spatial_KS_molecular.png"
+    mol_filename = f"{prefix}spatial_KS_molecular.png"
     fig_mol.savefig(f"{output_path}/{mol_filename}", dpi=300)
     pl.close(fig_mol)
 
@@ -585,55 +612,70 @@ def plot_KS_relations(
     fig_at, ax_at = pl.subplots(1, 1)
     fig_mol, ax_mol = pl.subplots(1, 1)
 
+    sim_lines = []
+    sim_labels = []
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
-        for Zmask, linestyle in [
-            ("all", "-"),
-            ("Zm1", "--"),
-            ("Z0", ":"),
-            ("Zp1", "-."),
-        ]:
+        for Zmask, _, linestyle, marker in metallicities:
+            if Zmask == "all" and always_plot_scatter:
+                plot_median_on_axis_as_pdf(
+                    ax_neut, data.medians[f"sigma_neutral_tgas_spatial_{Zmask}"]
+                )
+                plot_median_on_axis_as_pdf(
+                    ax_at, data.medians[f"sigma_HI_tgas_spatial_{Zmask}"]
+                )
+                plot_median_on_axis_as_pdf(
+                    ax_mol, data.medians[f"sigma_H2_tgas_spatial_{Zmask}"]
+                )
             plot_median_on_axis_as_line(
                 ax_neut,
                 data.medians[f"sigma_neutral_tgas_spatial_{Zmask}"],
                 color=f"C{i}",
                 linestyle=linestyle,
+                marker=marker,
             )
             plot_median_on_axis_as_line(
                 ax_at,
                 data.medians[f"sigma_HI_tgas_spatial_{Zmask}"],
                 color=f"C{i}",
                 linestyle=linestyle,
+                marker=marker,
             )
             plot_median_on_axis_as_line(
                 ax_mol,
                 data.medians[f"sigma_H2_tgas_spatial_{Zmask}"],
                 color=f"C{i}",
                 linestyle=linestyle,
+                marker=marker,
             )
 
     for ax in [ax_neut, ax_at, ax_mol]:
-        for Zlabel, linestyle in [
-            ("all", "-"),
-            ("$\\log_{10} Z/Z_\\odot = -1$", "--"),
-            ("$\\log_{10} Z/Z_\\odot = 0$", ":"),
-            ("$\\log_{10} Z/Z_\\odot = 1$", "-."),
-        ]:
-            ax.plot([], [], linestyle, color="k", label=Zlabel)
+        sim_lines = []
+        sim_labels = []
+        for i, (name, _) in enumerate(zip(name_list, all_galaxies_list)):
+            sim_lines.append(ax.plot([], [], "-", color=f"C{i}")[0])
+            sim_labels.append(name)
+        for _, Zlabel, linestyle, marker in metallicities:
+            sim_lines.append(
+                ax.plot([], [], linestyle=linestyle, marker=marker, color="k")[0]
+            )
+            sim_labels.append(Zlabel)
         ax.grid(True)
         ax.set_xlim(1.0e-1, 1.0e4)
         ax.set_ylim(1.0e7, 1.0e12)
         ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
-        ax.legend(loc="best")
+        sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+        ax.legend(loc="lower right")
+        ax.add_artist(sim_legend)
 
-    neut_filename = "spatial_tgas_neutral.png"
+    neut_filename = f"{prefix}spatial_tgas_neutral.png"
     fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
     pl.close(fig_neut)
 
-    at_filename = "spatial_tgas_atomic.png"
+    at_filename = f"{prefix}spatial_tgas_atomic.png"
     fig_at.savefig(f"{output_path}/{at_filename}", dpi=300)
     pl.close(fig_at)
 
-    mol_filename = "spatial_tgas_molecular.png"
+    mol_filename = f"{prefix}spatial_tgas_molecular.png"
     fig_mol.savefig(f"{output_path}/{mol_filename}", dpi=300)
     pl.close(fig_mol)
 
@@ -682,12 +724,7 @@ def plot_KS_relations(
     fig_at, ax_at = pl.subplots(1, 1)
 
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
-        for Zmask, linestyle in [
-            ("all", "-"),
-            ("Zm1", "--"),
-            ("Z0", ":"),
-            ("Zp1", "-."),
-        ]:
+        for Zmask, _, linestyle, marker in metallicities:
             if Zmask == "all" and len(name_list) == 1:
                 plot_median_on_axis_as_pdf(
                     ax_neut, data.medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"]
@@ -700,12 +737,14 @@ def plot_KS_relations(
                 data.medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"],
                 color=f"C{i}",
                 linestyle=linestyle,
+                marker=marker,
             )
             plot_median_on_axis_as_line(
                 ax_at,
                 data.medians[f"H2_to_HI_vs_neutral_spatial_{Zmask}"],
                 color=f"C{i}",
                 linestyle=linestyle,
+                marker=marker,
             )
 
     for dataname, ax in [("NeutralGasSurfaceDensityMolecularToAtomicRatio", ax_at)]:
@@ -722,13 +761,10 @@ def plot_KS_relations(
         for i, (name, _) in enumerate(zip(name_list, all_galaxies_list)):
             sim_lines.append(ax.plot([], [], "-", color=f"C{i}")[0])
             sim_labels.append(name)
-        for Zlabel, linestyle in [
-            ("all", "-"),
-            ("$\\log_{10} Z/Z_\\odot = -1$", "--"),
-            ("$\\log_{10} Z/Z_\\odot = 0$", ":"),
-            ("$\\log_{10} Z/Z_\\odot = 1$", "-."),
-        ]:
-            sim_lines.append(ax.plot([], [], linestyle, color="k")[0])
+        for _, Zlabel, linestyle, marker in metallicities:
+            sim_lines.append(
+                ax.plot([], [], linestyle=linestyle, marker=marker, color="k")[0]
+            )
             sim_labels.append(Zlabel)
         ax.grid(True)
         ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
@@ -741,11 +777,11 @@ def plot_KS_relations(
     ax_at.set_xlim(1.0e-1, 1.0e4)
     ax_at.set_ylim(1.0e-2, 1.0e3)
 
-    neut_filename = "H2_to_neutral_vs_neutral_spatial.png"
+    neut_filename = f"{prefix}H2_to_neutral_vs_neutral_spatial.png"
     fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
     pl.close(fig_neut)
 
-    at_filename = "H2_to_HI_vs_neutral_spatial.png"
+    at_filename = f"{prefix}H2_to_HI_vs_neutral_spatial.png"
     fig_at.savefig(f"{output_path}/{at_filename}", dpi=300)
     pl.close(fig_at)
 
@@ -801,7 +837,7 @@ def plot_KS_relations(
     ax.set_xlim(1.0e-1, 1.0e4)
     ax.set_ylim(1.0e-3, 1.0e1)
 
-    filename = "H2_to_star_vs_star_spatial.png"
+    filename = f"{prefix}H2_to_star_vs_star_spatial.png"
     fig.savefig(f"{output_path}/{filename}", dpi=300)
     pl.close(fig)
 
@@ -839,7 +875,7 @@ def plot_KS_relations(
     ax.set_xlim(1.0e-2, 1.0e3)
     ax.set_ylim(1.0e-11, 1.0e-7)
 
-    filename = "SFR_to_H2_vs_H2_spatial.png"
+    filename = f"{prefix}SFR_to_H2_vs_H2_spatial.png"
     fig.savefig(f"{output_path}/{filename}", dpi=300)
     pl.close(fig)
 
@@ -877,7 +913,7 @@ def plot_KS_relations(
     ax.set_xlim(1.0e-1, 1.0e4)
     ax.set_ylim(1.0e-13, 1.0e-7)
 
-    filename = "SFR_to_star_vs_star_spatial.png"
+    filename = f"{prefix}SFR_to_star_vs_star_spatial.png"
     fig.savefig(f"{output_path}/{filename}", dpi=300)
     pl.close(fig)
 

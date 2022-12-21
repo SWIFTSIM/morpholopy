@@ -13,6 +13,7 @@ from .KS import (
     calculate_integrated_surface_densities,
     calculate_spatially_resolved_KS,
     calculate_azimuthally_averaged_KS,
+    plot_KS_relations,
 )
 from .HI_size import calculate_HI_size
 from .medians import accumulate_median_data, compute_median
@@ -177,6 +178,17 @@ class GalaxyData:
     def get_median_data(self, key):
         return self.median_data[0][key]
 
+    def compute_medians(self):
+        self.medians = {}
+        for key in medians:
+            xvals, yvals = compute_median(medians[key], self.median_data[0][key])
+            self.medians[key] = {
+                "x centers": xvals.tolist(),
+                "y values": yvals.tolist(),
+                "PDF": self.median_data[0][key].tolist(),
+                **medians[key],
+            }
+
 
 class AllGalaxyData:
     def __init__(self, number_of_galaxies):
@@ -236,9 +248,21 @@ class AllGalaxyData:
 
 def process_galaxy(args):
 
-    index, galaxy_index, catalogue_filename, snapshot_filename, output_path, orientation_type, make_plots, main_log = (
-        args
-    )
+    # unpack arguments
+    # note that we have to use this approach because
+    # multiprocessing.Pool.imap_unordered() requires a function that only
+    # takes a single argument
+    (
+        index,
+        galaxy_index,
+        catalogue_filename,
+        snapshot_filename,
+        output_path,
+        observational_data_path,
+        orientation_type,
+        make_plots,
+        main_log,
+    ) = args
 
     galaxy_log = main_log.get_galaxy_log(galaxy_index)
 
@@ -530,14 +554,29 @@ def process_galaxy(args):
     )
 
     if make_plots:
-        images = plot_galaxy(
-            catalogue,
-            galaxy_index,
-            index,
-            data,
-            face_on_rmatrix,
-            edge_on_rmatrix,
+        images = {
+            f"ZZZ - Galaxy {galaxy_index}": plot_galaxy(
+                catalogue,
+                galaxy_index,
+                index,
+                data,
+                face_on_rmatrix,
+                edge_on_rmatrix,
+                output_path,
+            )
+        }
+        galaxy_data.compute_medians()
+        KS_images = plot_KS_relations(
             output_path,
+            observational_data_path,
+            [f"Galaxy {galaxy_index}"],
+            [galaxy_data],
+            prefix=f"galaxy_{index:03d}_",
+            always_plot_scatter=True,
+            plot_integrated_quantities=False,
+        )
+        images[f"ZZZ - Galaxy {galaxy_index}"].update(
+            KS_images["Combined surface densities"]
         )
     else:
         images = None

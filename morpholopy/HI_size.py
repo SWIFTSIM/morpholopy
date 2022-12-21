@@ -9,6 +9,8 @@ import matplotlib.pyplot as pl
 from velociraptor.observations import load_observations
 import glob
 
+from .plot import plot_data_on_axis
+
 make_plots = False
 
 
@@ -228,10 +230,11 @@ def plot_HI_size_mass(
         HI_size = unyt.unyt_array(data["HI_size"], "kpc")
         HI_size.name = "HI Size"
 
-        with unyt.matplotlib_support:
-            line = ax.loglog(HI_mass, HI_size, "o", color=f"C{i}")[0]
-            sim_lines.append(line)
-            sim_labels.append(name)
+        line = plot_data_on_axis(
+            ax, HI_mass, HI_size, color=f"C{i}", plot_scatter=(len(name_list) == 1)
+        )
+        sim_lines.append(line)
+        sim_labels.append(name)
 
     observational_data = load_observations(
         sorted(glob.glob(f"{observational_data_path}/GalaxyHISizeMass/*.hdf5"))
