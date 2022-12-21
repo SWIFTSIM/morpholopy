@@ -131,17 +131,18 @@ def plot_median_on_axis_as_pdf(ax, median):
     ybin_centres = 0.5 * (ybin_edges[1:] + ybin_edges[:-1])
     xv, yv = np.meshgrid(xbin_centres, ybin_centres)
 
-    PDF = np.array(median["PDF"])
-
-    ax.hexbin(
-        xv.flatten(),
-        yv.flatten(),
-        PDF.T.flatten(),
-        bins="log",
-        xscale=xscale,
-        yscale=yscale,
-        mincnt=1,
-    )
+    PDF = np.array(median["PDF"], dtype=np.int64)
+    N = PDF.sum()
+    if N > 0:
+        ax.hexbin(
+            xv.flatten(),
+            yv.flatten(),
+            PDF.T.flatten(),
+            bins=[0.001 * N, 0.01 * N, 0.1 * N, N],
+            xscale=xscale,
+            yscale=yscale,
+            norm=matplotlib.colors.LogNorm(),
+        )
 
     if median["log x"]:
         ax.set_xscale("log")
