@@ -82,9 +82,9 @@ def compute_median(median, median_data):
 def plot_median_on_axis_as_line(ax, median, color, linestyle="-", marker="o"):
 
     x = unyt.unyt_array(median["x centers"], median["x units"])
-    x.name = median.get("x label")
+    x.name = median.get("x label", "")
     y = unyt.unyt_array(median["y values"], median["y units"])
-    y.name = median.get("y label")
+    y.name = median.get("y label", "")
 
     line = None
     with unyt.matplotlib_support:
@@ -129,19 +129,14 @@ def plot_median_on_axis_as_pdf(ax, median):
 
     xbin_centres = 0.5 * (xbin_edges[1:] + xbin_edges[:-1])
     ybin_centres = 0.5 * (ybin_edges[1:] + ybin_edges[:-1])
-    xv, yv = np.meshgrid(xbin_centres, ybin_centres)
+    xv, yv = np.meshgrid(xbin_edges, ybin_edges)
 
-    PDF = np.array(median["PDF"], dtype=np.int64)
-    N = PDF.sum()
-    if N > 0:
-        ax.hexbin(
-            xv.flatten(),
-            yv.flatten(),
-            PDF.T.flatten(),
-            bins=[0.001 * N, 0.01 * N, 0.1 * N, N],
-            xscale=xscale,
-            yscale=yscale,
-            norm=matplotlib.colors.LogNorm(),
+    PDF = np.array(median["PDF"], dtype=np.float64)
+    if PDF.sum() > 0:
+        # mask out 0 bins, because pcolormesh does not correctly do that
+        PDF[PDF == 0] = np.nan
+        ax.pcolormesh(
+            xv, yv, PDF.T, norm=matplotlib.colors.LogNorm(), alpha=0.5, zorder=-9000
         )
 
     if median["log x"]:
