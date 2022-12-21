@@ -116,6 +116,17 @@ parser.add_argument(
     ),
 )
 
+parser.add_argument(
+    "-l",
+    "--lazy",
+    required=False,
+    action="store_true",
+    help=(
+        "Run in lazy mode: do not recompute anything, but simply read the data"
+        " from the existing metadata file (assuming it does exist)."
+    ),
+)
+
 
 def init_child_process(env, temp_folder, stylesheet_path):
     """
@@ -223,88 +234,93 @@ if __name__ == "__main__":
     all_galaxies_list = []
     all_images = {}
     if not is_comparison:
-        halo_catalogue_filename = f"{args.input[0]}/{args.catalogues[0]}"
-        snapshot_filename = f"{args.input[0]}/{args.snapshots[0]}"
-
-        catalogue = load_catalogue(halo_catalogue_filename, disregard_units=True)
-        filtered_catalogue = FilteredCatalogue(
-            catalogue,
-            config.mass_limit_stars_in_Msun,
-            config.mass_variable_stars,
-            config.mass_limit_gas_in_Msun,
-            config.mass_variable_gas,
-            config.plotting_lower_mass_limit_in_Msun,
-            config.plotting_upper_mass_limit_in_Msun,
-            config.plotting_number_of_galaxies,
-            config.plotting_random_seed,
-        )
-        # close the catalogue by unloading it explicitly
-        catalogue = None
-
-        # create an empty object to store morphological data for all galaxies
-        number_of_galaxies = len(filtered_catalogue.galaxy_indices)
-        all_galaxies = AllGalaxyData(number_of_galaxies)
-
-        # create a list of arguments for parallel processing
-        arglist = [
-            (
-                index,
-                galaxy_index,
-                halo_catalogue_filename,
-                snapshot_filename,
-                args.output,
-                observational_data_path,
-                config.orientation_method,
-                make_plots,
-                main_log,
-            )
-            for index, (galaxy_index, make_plots) in enumerate(
-                zip(filtered_catalogue.galaxy_indices, filtered_catalogue.plot_galaxy)
-            )
-        ]
-
-        arglist = sorted(arglist, key=lambda x: x[7], reverse=True)
-
-        # determine the appropriate number of parallel processes to use
-        num_proc = args.num_of_cpus
-        if num_proc is None:
-            num_proc = mp.cpu_count()
-        # make sure we don't use more processes than there are galaxies
-        num_proc = min(num_proc, number_of_galaxies)
-        """
-        # serial version (has better crash reports)
-        for index, galaxy_data in map(process_galaxy, arglist):
-        """
-        main_log.message(
-            f"Computing properties for {number_of_galaxies} galaxies using"
-            f" {num_proc} parallel processes..."
-        )
-        parent_env = os.environ.copy()
-        pool = mp.Pool(
-            num_proc,
-            initializer=init_child_process,
-            initargs=(parent_env, tmpdir, stylesheet_path),
-        )
-        galaxy_count = 0
-        for index, galaxy_data, images in pool.imap_unordered(process_galaxy, arglist):
-            galaxy_count += 1
-            main_log.debug(
-                f"Finished processing galaxy {index} [{galaxy_count}/{number_of_galaxies}]"
-            )
-            # add galaxy contribution to global data
-            all_galaxies[index] = galaxy_data
-            if images is not None:
-                main_log.debug(f"Adding figures for galaxy {index}")
-                all_images.update(images)
-        pool.close()
-        pool.join()
-
-        main_log.debug("Creating metadata output file")
-        # save plot data using the given metadata name
         metadata_filename = (
             f"{args.input[0]}/{args.metadata}_{args.snapshots[0][-9:-5]}.yml"
         )
-        all_galaxies.output(metadata_filename)
+
+        if not args.lazy:
+            halo_catalogue_filename = f"{args.input[0]}/{args.catalogues[0]}"
+            snapshot_filename = f"{args.input[0]}/{args.snapshots[0]}"
+
+            catalogue = load_catalogue(halo_catalogue_filename, disregard_units=True)
+            filtered_catalogue = FilteredCatalogue(
+                catalogue,
+                config.mass_limit_stars_in_Msun,
+                config.mass_variable_stars,
+                config.mass_limit_gas_in_Msun,
+                config.mass_variable_gas,
+                config.plotting_lower_mass_limit_in_Msun,
+                config.plotting_upper_mass_limit_in_Msun,
+                config.plotting_number_of_galaxies,
+                config.plotting_random_seed,
+            )
+            # close the catalogue by unloading it explicitly
+            catalogue = None
+
+            # create an empty object to store morphological data for all galaxies
+            number_of_galaxies = len(filtered_catalogue.galaxy_indices)
+            all_galaxies = AllGalaxyData(number_of_galaxies)
+
+            # create a list of arguments for parallel processing
+            arglist = [
+                (
+                    index,
+                    galaxy_index,
+                    halo_catalogue_filename,
+                    snapshot_filename,
+                    args.output,
+                    observational_data_path,
+                    config.orientation_method,
+                    make_plots,
+                    main_log,
+                )
+                for index, (galaxy_index, make_plots) in enumerate(
+                    zip(
+                        filtered_catalogue.galaxy_indices,
+                        filtered_catalogue.plot_galaxy,
+                    )
+                )
+            ]
+
+            # make sure galaxies with plots are processed first, since they take
+            # longer than average
+            arglist = sorted(arglist, key=lambda x: x[7], reverse=True)
+
+            # determine the appropriate number of parallel processes to use
+            num_proc = args.num_of_cpus
+            if num_proc is None:
+                num_proc = mp.cpu_count()
+            # make sure we don't use more processes than there are galaxies
+            num_proc = min(num_proc, number_of_galaxies)
+            main_log.message(
+                f"Computing properties for {number_of_galaxies} galaxies using"
+                f" {num_proc} parallel processes..."
+            )
+            parent_env = os.environ.copy()
+            pool = mp.Pool(
+                num_proc,
+                initializer=init_child_process,
+                initargs=(parent_env, tmpdir, stylesheet_path),
+            )
+            galaxy_count = 0
+            for index, galaxy_data, images in pool.imap_unordered(
+                process_galaxy, arglist
+            ):
+                galaxy_count += 1
+                main_log.debug(
+                    f"Finished processing galaxy {index} [{galaxy_count}/{number_of_galaxies}]"
+                )
+                # add galaxy contribution to global data
+                all_galaxies[index] = galaxy_data
+                if images is not None:
+                    main_log.debug(f"Adding figures for galaxy {index}")
+                    all_images.update(images)
+            pool.close()
+            pool.join()
+
+            main_log.debug("Creating metadata output file")
+            # save plot data using the given metadata name
+            all_galaxies.output(metadata_filename)
 
         main_log.debug("Regenerating metadata from output file")
         # regenerate the data from the file, for consistency with the comparison case

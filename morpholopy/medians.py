@@ -140,6 +140,7 @@ def plot_median_on_axis_as_pdf(ax, median):
         bins="log",
         xscale=xscale,
         yscale=yscale,
+        mincnt=1,
     )
 
     if median["log x"]:
