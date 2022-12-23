@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 morphology-pipeline is used to generate complex morphological plots for one or
 multiple COLIBRE simulation runs. These plot require a relatively expensive
@@ -6,17 +7,50 @@ analysis of galaxies in the simulation on an individual galaxy basis and are
 therefore more challenging to generate than the plots in the conventional
 pipeline.
 
-ADD MORE DESCRIPTION HERE
+Usage:
+  ./morphology-pipeline \
+    -C/--config      <configuration directory> \
+    -i/--input       <input folder that contains the snapshots and catalogues> \
+    -s/--snapshots   <input snapshot> \
+    -c/--catalogues  <input catalogue> \
+    -o/--output      <directory where output images and web pages are stored> \
+   [-n/--run-names   <name for the run>] \
+   [-j/--num-of-cpus <number of parallel processes to use>] \
+   [-m/--metadata    <prefix for the meta-data output file] \
+   [-d/--debug] \
+   [-l/--lazy]
+(the last four arguments are optional). See the README for more details.
 """
 
 import argparse as ap
 import multiprocessing as mp
 import os
 
+from typing import Dict, Union
+
+# set up the command line argument parser
 parser = ap.ArgumentParser(
     prog="morphology-pipeline",
-    description=("TO PROVIDE"),
-    epilog=("Example usage: TO PROVIDE\n"),
+    description=(
+        "Compute morphological quantities for a simulation"
+        " and create corresponding plots and a web page."
+    ),
+    epilog=(
+        "Example usage:\n"
+        "  ./morphology-pipeline \ \n"
+        "    -C/--config      <configuration directory> \ \n"
+        "    -i/--input       <input folder that contains the snapshots and catalogues> \ \n"
+        "    -s/--snapshots   <input snapshot> \ \n"
+        "    -c/--catalogues  <input catalogue> \ \n"
+        "    -o/--output      <directory where output images and web pages are stored> \ \n"
+        "   [-n/--run-names   <name for the run>] \ \n"
+        "   [-j/--num-of-cpus <number of parallel processes to use>] \ \n"
+        "   [-m/--metadata    <prefix for the meta-data output file] \ \n"
+        "   [-d/--debug] \ \n"
+        "   [-l/--lazy]"
+    ),
+    # we need this to preserve the line breaks in the epilog
+    formatter_class=ap.RawDescriptionHelpFormatter,
 )
 
 parser.add_argument(
@@ -128,7 +162,7 @@ parser.add_argument(
 )
 
 
-def init_child_process(env, temp_folder, stylesheet_path):
+def init_child_process(env: Dict, temp_folder: str, stylesheet_path: Union[str, None]):
     """
     Matplotlib with LaTeX support is not safe to use in parallel.
     The reason is that Matplotlib saves some intermediary files in a temporary
@@ -149,10 +183,18 @@ def init_child_process(env, temp_folder, stylesheet_path):
     matplotlib.use("Agg")
     import matplotlib.pyplot as pl
 
-    pl.style.use(stylesheet_path)
+    if stylesheet_path is not None:
+        pl.style.use(stylesheet_path)
 
 
 if __name__ == "__main__":
+    """
+    Main entry point.
+
+    Note that this block is not executed by subprocesses, while everything above
+    that is not in a function is. All large memory allocations done below will
+    only affect the main process.
+    """
 
     from velociraptor import load as load_catalogue
     from swiftsimio import load as load_snapshot
@@ -183,26 +225,38 @@ if __name__ == "__main__":
     # relevant data in memory are copied
     mp.set_start_method("forkserver")
 
+    # parse the command line arguments
     args = parser.parse_args()
 
+    # set up the logging
+    # there should only be one MainLog; subprocesses should obtain their own
+    # GalaxyLog from the MainLog using MainLog.get_galaxy_log().
     main_log = MainLog(log_level="WORKERDEBUG" if args.debug else "WORKER")
 
     # create a temporary directory for the per subprocess Matplotlib cache
     # directories
+    # see the documentation of init_child_process() above
     tmpdir = tempfile.mkdtemp()
     main_log.debug(f"Will save temporary files in {tmpdir}")
 
+    # read the configuration file
+    # we use a custom subclass of swiftpipeline.Config, since we need some
+    # additional configuration options (and we need to use a hack to add
+    # our images to the web page)
     config = MorphologyConfig(config_directory=args.config)
 
+    # set the Matplotlib style
     stylesheet_path = None
     if config.matplotlib_stylesheet != "default":
         stylesheet_path = f"{config.config_directory}/{config.matplotlib_stylesheet}"
         pl.style.use(stylesheet_path)
 
+    # list the input snapshots
     snapshots = [
         load_snapshot(f"{input}/{snapshot}")
         for input, snapshot in zip(args.input, args.snapshots)
     ]
+    # create names for the different runs if not provided
     if args.run_names is not None:
         run_names = args.run_names
     else:
@@ -220,28 +274,36 @@ if __name__ == "__main__":
                 for data in snapshots
             ]
 
-    # observational data will be added later
+    # get the observational data path
     observational_data_path = (
         f"{config.config_directory}/{config.observational_data_directory}/data"
     )
     main_log.debug(f"Observational data path: {observational_data_path}")
 
+    # create the output directory if it does not exist
     if not os.path.exists(args.output):
         os.mkdir(args.output)
 
+    # check if we are running in single mode or comparison mode
     is_comparison = len(args.snapshots) > 1
 
+    # create empty lists to store images and galaxy data
     all_galaxies_list = []
     all_images = {}
     if not is_comparison:
+        # compose the meta-data file name
         metadata_filename = (
             f"{args.input[0]}/{args.metadata}_{args.snapshots[0][-9:-5]}.yml"
         )
 
         if not args.lazy:
+            # compute the galaxy properties
+            # start by getting the catalogue and snapshot file name
             halo_catalogue_filename = f"{args.input[0]}/{args.catalogues[0]}"
             snapshot_filename = f"{args.input[0]}/{args.snapshots[0]}"
 
+            # load the catalogue and create the filtered catalogue that only
+            # contains galaxies above our threshold mass limits
             catalogue = load_catalogue(halo_catalogue_filename, disregard_units=True)
             filtered_catalogue = FilteredCatalogue(
                 catalogue,
@@ -262,6 +324,17 @@ if __name__ == "__main__":
             all_galaxies = AllGalaxyData(number_of_galaxies)
 
             # create a list of arguments for parallel processing
+            # these should correspond to the argument needed by
+            # process_galaxy():
+            #  - the index in the global galaxy list
+            #  - the catalogue index of the galaxy (its VR/SOAP index)
+            #  - the catalogue file name
+            #  - the snapshot file name
+            #  - the output directory name
+            #  - the observational data path
+            #  - the orientation method string
+            #  - whether or not to make individual plots for this galaxy
+            #  - the MainLog
             arglist = [
                 (
                     index,
@@ -286,7 +359,10 @@ if __name__ == "__main__":
             # longer than average
             arglist = sorted(arglist, key=lambda x: x[7], reverse=True)
 
-            # determine the appropriate number of parallel processes to use
+            # determine the appropriate number of parallel processes to use:
+            #  - the number requested by the user
+            #  - in the absence thereof, the available number of threads reported
+            #    by multiprocessing.cpu_count()
             num_proc = args.num_of_cpus
             if num_proc is None:
                 num_proc = mp.cpu_count()
@@ -296,13 +372,22 @@ if __name__ == "__main__":
                 f"Computing properties for {number_of_galaxies} galaxies using"
                 f" {num_proc} parallel processes..."
             )
+            # create the pool of subprocesses that will analyse individual
+            # galaxies. We initialise every subprocess using init_child_process(),
+            # which requires a copy of the environment variables (so that we can
+            # change them), the name of the temporary directory we created, and the
+            # Matplotlib style sheet.
             parent_env = os.environ.copy()
             pool = mp.Pool(
                 num_proc,
                 initializer=init_child_process,
                 initargs=(parent_env, tmpdir, stylesheet_path),
             )
+            # counter used to display progress
+            # we cannot simply use 'index', since the order of processing is not
+            # fixed
             galaxy_count = 0
+            # process all galaxies using the parallel pool
             for index, galaxy_data, images in pool.imap_unordered(
                 process_galaxy, arglist
             ):
@@ -312,9 +397,13 @@ if __name__ == "__main__":
                 )
                 # add galaxy contribution to global data
                 all_galaxies[index] = galaxy_data
+                # add galaxy images to the images, if there are any
                 if images is not None:
                     main_log.debug(f"Adding figures for galaxy {index}")
                     all_images.update(images)
+            # properly terminate the parallel pool
+            # while not strictly necessary, not doing this sometimes spawns
+            # confusing warning messages
             pool.close()
             pool.join()
 
@@ -324,9 +413,10 @@ if __name__ == "__main__":
 
         main_log.debug("Regenerating metadata from output file")
         # regenerate the data from the file, for consistency with the comparison case
+        # (and because we did not compute anything if we run in lazy mode)
         all_galaxies_list = [AllGalaxyData.fromfile(metadata_filename)]
     else:
-        # Need to generate our data again from the built-in yaml files.
+        # Need to generate our data again from the existing meta-data files.
         metadata_filenames = [
             f"{input}/{args.metadata}_{snapshot[-9:-5]}.yml"
             for input, snapshot in zip(args.input, args.snapshots)
@@ -338,6 +428,7 @@ if __name__ == "__main__":
             AllGalaxyData.fromfile(filename) for filename in metadata_filenames
         ]
 
+    # create global plots
     main_log.debug("Making global plots")
     all_images.update(
         plot_HI_size_mass(
@@ -355,10 +446,15 @@ if __name__ == "__main__":
         )
     )
 
+    # now add the images to the configuration file
+    # this is a bit of a hack: we pretend that the images are "scripts" and
+    # reuse the existing pipeline support for those. This is done by our
+    # custom swiftpipeline.Config subclass
     config.add_images(all_images)
 
-    main_log.debug("Creating webpage")
     # Create the webpage
+    # This simply uses the swiftpipeline mechanism
+    main_log.debug("Creating webpage")
     webpage = WebpageCreator()
     webpage.add_config_metadata(config=config, is_comparison=is_comparison)
     webpage.add_metadata(page_name=" | ".join(run_names))
@@ -370,4 +466,5 @@ if __name__ == "__main__":
     main_log.debug(f"Removing temporary directory {tmpdir}")
     shutil.rmtree(tmpdir)
 
+    # Tell the user we are done
     main_log.message(f"Done running pipeline.")

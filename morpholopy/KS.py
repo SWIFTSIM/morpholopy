@@ -1,3 +1,13 @@
+#!/usr/bin/env python3
+
+"""
+KS.py
+
+Kennicutt-Schmidt like quantities and plots.
+
+Mostly copied over from the old morphology pipeline.
+"""
+
 import numpy as np
 import swiftsimio as sw
 import unyt
@@ -11,6 +21,13 @@ import glob
 
 from .medians import plot_median_on_axis_as_line, plot_median_on_axis_as_pdf
 
+from typing import Dict, List, Tuple, Union
+from numpy.typing import NDArray
+from swiftsimio import SWIFTDataset
+
+# solar metallicity value assumed to compute metallicities
+Zsolar = 0.0134
+
 # markers used to distinguish different simulations in integrated plots
 markers = ["o", "s", "^", "D", "v"]
 # labels and line styles for different metallicity cuts
@@ -21,13 +38,41 @@ metallicities = [
     ("Zp1", "$\\log_{10} Z/Z_\\odot = 1$", (0, (3, 2, 1, 2)), "D"),
 ]
 
+# debugging: plot individual surface density images
 make_plots = False
-Zsolar = 0.0134
 
 
 def calculate_surface_densities_grid(
-    data, face_on_rmatrix, gas_mask, stars_mask, index, resolution=128
-):
+    data: SWIFTDataset,
+    face_on_rmatrix: NDArray[float],
+    gas_mask: NDArray[bool],
+    stars_mask: NDArray[bool],
+    index: int,
+    resolution: int = 128,
+) -> Dict:
+    """
+    Generate a set of face-on surface density projections that is needed for the
+    various KS quantities.
+
+    Parameters:
+     - data: SWIFTDataset
+       Galaxy data, already recentred on the galaxy centre.
+     - face_on_rmatrix: NDArray[float]
+       Face-on rotation matrix.
+     - gas_mask: NDArray[bool]
+       30 kpc aperture mask for gas particles.
+     - stars_mask: NDArray[bool]
+       30 kpc aperture mask for star particles.
+     - index: int
+       Unique index for this galaxy, used to guarantee unique names for debugging
+       images.
+     - resolution: int
+       Pixel resolution of the maps. Note that the physical size of the maps is
+       fixed to a 60 kpc square centred on the galaxy (with 60 kpc of depth in the
+       projection direction).
+
+    Returns a dictionary with all the maps.
+    """
 
     R = sw.objects.cosmo_array(
         30.0 * unyt.kpc, comoving=False, cosmo_factor=data.gas.coordinates.cosmo_factor
@@ -112,7 +157,33 @@ def calculate_surface_densities_grid(
     return images
 
 
-def calculate_spatially_resolved_KS(data, face_on_rmatrix, gas_mask, stars_mask, index):
+def calculate_spatially_resolved_KS(
+    data: SWIFTDataset,
+    face_on_rmatrix: NDArray[float],
+    gas_mask: NDArray[bool],
+    stars_mask: NDArray[bool],
+    index: int,
+) -> Tuple[NDArray]:
+    """
+    Compute the KS surface density pixel values.
+    Computes an appropriate image resolution and then delegates the
+    actual computation to calculate_surface_densities_grid().
+
+    Parameters:
+     - data: SWIFTDataset
+       Galaxy data, already recentred on the galaxy centre.
+     - face_on_rmatrix: NDArray[float]
+       Face-on rotation matrix.
+     - gas_mask: NDArray[bool]
+       30 kpc aperture mask for gas particles.
+     - stars_mask: NDArray[bool]
+       30 kpc aperture mask for star particles.
+     - index: int
+       Unique index for this galaxy, used to guarantee unique names for debugging
+       images.
+
+    Returns a tuple with all the pixel values that are actually of interest.
+    """
     image_diameter = 60.0 * unyt.kpc
     pixel_size = 0.75 * unyt.kpc
     resolution = int((image_diameter / pixel_size).value) + 1
@@ -133,7 +204,29 @@ def calculate_spatially_resolved_KS(data, face_on_rmatrix, gas_mask, stars_mask,
     )
 
 
-def calculate_azimuthally_averaged_KS(data, face_on_rmatrix, gas_mask, index):
+def calculate_azimuthally_averaged_KS(
+    data: SWIFTDataset,
+    face_on_rmatrix: NDArray[float],
+    gas_mask: NDArray[float],
+    index: int,
+) -> Tuple[Union[NDArray, None]]:
+    """
+    Compute azimuthally averaged surface densities relevant for KS plots.
+
+    Parameters:
+     - data: SWIFTDataset
+       Galaxy data, already recentred on the galaxy centre.
+     - face_on_rmatrix: NDArray[float]
+       Face-on rotation matrix.
+     - gas_mask: NDArray[bool]
+       30 kpc aperture mask for gas particles.
+     - index: int
+       Unique index for this galaxy, used to guarantee unique names for debugging
+       images.
+
+    Returns a tuple with all the azimuthal bin values that are actually of interest, or
+    None if there is no gas.
+    """
     if gas_mask.sum() == 0:
         return None, None, None, None, None
 
@@ -199,7 +292,28 @@ def calculate_azimuthally_averaged_KS(data, face_on_rmatrix, gas_mask, index):
     )
 
 
-def calculate_integrated_surface_densities(data, face_on_rmatrix, gas_mask, radius):
+def calculate_integrated_surface_densities(
+    data: SWIFTDataset,
+    face_on_rmatrix: NDArray[float],
+    gas_mask: NDArray[bool],
+    radius: unyt.unyt_quantity,
+) -> Tuple[Union[float, None]]:
+    """
+    Compute integrated surface densities relevant for KS plots.
+
+    Parameters:
+     - data: SWIFTDataset
+       Galaxy data, already recentred on the galaxy centre.
+     - face_on_rmatrix: NDArray[float]
+       Face-on rotation matrix.
+     - gas_mask: NDArray[bool]
+       30 kpc aperture mask for gas particles.
+     - radius: unyt.unyt_quantity
+       Radius of the integration circle.
+
+    Returns a tuple with all the integrated values that are actually of interest, or
+    None if the integration radius is 0.
+    """
 
     if radius == 0.0:
         return 0.0, 0.0, 0.0, 0.0
@@ -226,14 +340,38 @@ def calculate_integrated_surface_densities(data, face_on_rmatrix, gas_mask, radi
 
 
 def plot_KS_relations(
-    output_path,
-    observational_data_path,
-    name_list,
-    all_galaxies_list,
-    prefix="",
-    always_plot_scatter=False,
-    plot_integrated_quantities=True,
-):
+    output_path: str,
+    observational_data_path: str,
+    name_list: List[str],
+    all_galaxies_list: Union[List["AllGalaxyData"], List["GalaxyData"]],
+    prefix: str = "",
+    always_plot_scatter: bool = False,
+    plot_integrated_quantities: bool = True,
+) -> Dict:
+    """
+    Create KS related plots.
+
+    Parameters:
+     - output_path: str
+       Directory where images should be created.
+     - observational_data_path: str
+       Path to the observational data repository data (i.e. velociraptor-comparison-data/data).
+     - name_list: List[str]
+       Name labels for all the simulations that need to be plotted.
+     - all_galaxies_list: Union[List[GalaxyData], List[AllGalaxyData]]
+       Data for all the simulations that need to be plotted (can be a single galaxy for
+       individual galaxy plots).
+     - prefix: str
+       Unique prefix that is prepended to images file names. Useful to distinguish
+       individual galaxy images.
+     - always_plot_scatter: bool
+       Wheter or not to always plot individual median histrogram bins as well as median lines.
+     - plot_integrated_quantities: bool
+       Whether or not to plot integrated KS plots. Set to False for individual galaxy plots,
+       since a galaxy is only a single point on those plots.
+
+    Returns an image data dictionary compatible with MorphologyConfig.add_images().
+    """
 
     plots = {}
 

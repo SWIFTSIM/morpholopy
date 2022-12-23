@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+
+"""
+galaxy_plots.py
+
+Code to generate images for individual galaxies.
+Mostly copied over from the old morphology pipeline.
+"""
+
 import numpy as np
 import matplotlib
 

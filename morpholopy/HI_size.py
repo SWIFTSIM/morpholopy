@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+
+"""
+HI_size.py
+
+Script that computes the HI size by fitting a Gaussian profile
+to the face-on HI surface density map.
+"""
+
 import numpy as np
 import swiftsimio as sw
 import scipy.optimize as opt
@@ -11,10 +20,18 @@ import glob
 
 from .plot import plot_data_on_axis
 
+from typing import Dict, List, Tuple, Union
+from numpy.typing import NDArray
+from .logging import GalaxyLog
+from swiftsimio import SWIFTDataset
+
+# plot the surface density map and fit? Useful for debugging.
 make_plots = False
 
 
-def gauss_curve(x, A, a, b, c, x0, y0):
+def gauss_curve(
+    x: NDArray, A: float, a: float, b: float, c: float, x0: float, y0: float
+) -> NDArray:
     """
     General 2D elliptical Gaussian function, based on Rajohnson et al. (2022),
     equation (2).
@@ -41,8 +58,13 @@ def gauss_curve(x, A, a, b, c, x0, y0):
 
 
 def calculate_HI_size(
-    galaxy_log, data, face_on_rmatrix, gas_mask, index, resolution=128
-):
+    galaxy_log: GalaxyLog,
+    data: SWIFTDataset,
+    face_on_rmatrix: NDArray[float],
+    gas_mask: NDArray[bool],
+    index: int,
+    resolution: int = 128,
+) -> Tuple[float, float]:
     """
     Calculate the HI size of the given galaxy by fitting a 2D elliptical function
     to the surface density profile and measuring the diameter along the major axis
@@ -51,14 +73,13 @@ def calculate_HI_size(
 
     Parameters
     ----------
-    data: gas data (as returned by simulation_data.make_particle_data() - note
-          that the positions have been recentred onto the centre of the halo)
-    ang_momentum: angular momentum vector of the galaxy
-    galaxy_data: HaloCatalogue object to store the HI size in
-    output_path: directory in which to store images
-    index: halo index, used to index images
+    galaxy_log: GalaxyLog to write debug messages to
+    data: SWIFTDataset containing the gas particles. Particle positions should already
+          be recentred on the galaxy centre.
+    face_on_rmatrix: rotation matrix used for face-on projections.
+    index: halo index, used to index debug images.
     resolution: resolution of the image that is used to fit the elliptical profile
-                the default value (64) provides a good mix of accuracy and speed
+                the default value (128) provides a good mix of accuracy and speed.
     """
 
     R = sw.objects.cosmo_array(
@@ -217,8 +238,27 @@ def calculate_HI_size(
 
 
 def plot_HI_size_mass(
-    output_path, observational_data_path, name_list, all_galaxies_list
-):
+    output_path: str,
+    observational_data_path: str,
+    name_list: List[str],
+    all_galaxies_list: Union[List["AllGalaxyData"], List["GalaxyData"]],
+) -> Dict:
+    """
+    Create HI size related plots.
+
+    Parameters:
+     - output_path: str
+       Directory where images should be created.
+     - observational_data_path: str
+       Path to the observational data repository data (i.e. velociraptor-comparison-data/data).
+     - name_list: List[str]
+       Name labels for all the simulations that need to be plotted.
+     - all_galaxies_list: Union[List[GalaxyData], List[AllGalaxyData]]
+       Data for all the simulations that need to be plotted (can be a single galaxy for
+       individual galaxy plots).
+
+    Returns an image data dictionary compatible with MorphologyConfig.add_images().
+    """
 
     fig, ax = pl.subplots(1, 1)
 

@@ -1,27 +1,47 @@
+#!/usr/bin/env python3
+
+"""
+morphology.py
+
+Morphology related plots: axis lengths and angular momenta.
+"""
+
 import numpy as np
 import unyt
 from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
-from .orientation import (
-    get_orientation_mask,
-    get_mass_position_velocity,
-    get_mass_position_velocity_nomask,
-    get_orientation_mask_radius,
-)
+from .orientation import get_orientation_mask
 from .plot import plot_data_on_axis
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as pl
 
+from typing import Dict, List, Tuple, Union
+from numpy.typing import NDArray
+from .logging import GalaxyLog
+
 
 def get_axis_lengths_tensor(
-    galaxy_log,
-    partdata,
-    half_mass_radius,
-    mass_variable="masses",
-    reduced=True,
-    iterative=True,
-):
+    galaxy_log: GalaxyLog,
+    partdata: "SWIFTParticleDataset",
+    half_mass_radius: unyt.unyt_quantity,
+    mass_variable: str = "masses",
+    reduced: bool = True,
+    iterative: bool = True,
+) -> Tuple[unyt.unyt_array, NDArray[float]]:
+    """
+    Get the axis lengths and z axis vector by diagonalising the
+    (reduced) moment of inertia tensor of the given particles,
+    using the given mass variable.
+
+    This either uses the normal or the reduced moment of inertia tensor
+    depending on the value of the 'reduced' parameter.
+
+    When 'iterative=True', the initial axis ratios are used to define an
+    ellipsoid with the same volume as the original aperture sphere. The
+    calculation is then repeated for all the particles within this ellipsoid.
+    The procedure is repeated until the axis ratios converge.
+    """
 
     all_position = partdata.coordinates
     all_mass = getattr(partdata, mass_variable)
@@ -158,8 +178,14 @@ def get_axis_lengths_tensor(
 
 
 def get_axis_lengths_reduced_tensor(
-    galaxy_log, partdata, half_mass_radius, mass_variable="masses"
-):
+    galaxy_log: GalaxyLog,
+    partdata: "SWIFTParticleDataset",
+    half_mass_radius: unyt.unyt_quantity,
+    mass_variable: str = "masses",
+) -> Tuple[unyt.unyt_array, NDArray[float]]:
+    """
+    Call get_axis_lengths_tensor() with reduced=True.
+    """
     return get_axis_lengths_tensor(
         galaxy_log,
         partdata,
@@ -171,8 +197,14 @@ def get_axis_lengths_reduced_tensor(
 
 
 def get_axis_lengths_normal_tensor(
-    galaxy_log, partdata, half_mass_radius, mass_variable="masses"
-):
+    galaxy_log: GalaxyLog,
+    partdata: "SWIFTParticleDataset",
+    half_mass_radius: unyt.unyt_quantity,
+    mass_variable: str = "masses",
+) -> Tuple[unyt.unyt_array, NDArray[float]]:
+    """
+    Call get_axis_lengths_tensor() with reduced=False.
+    """
     return get_axis_lengths_tensor(
         galaxy_log,
         partdata,
@@ -184,14 +216,24 @@ def get_axis_lengths_normal_tensor(
 
 
 def get_kappa_corot(
-    partdata,
-    half_mass_radius,
-    R200crit,
-    Rvir,
-    orientation_type,
-    orientation_vector,
-    mass_variable="masses",
-):
+    partdata: "SWIFTParticleDataset",
+    half_mass_radius: unyt.unyt_quantity,
+    R200crit: unyt.unyt_quantity,
+    Rvir: unyt.unyt_quantity,
+    orientation_type: str,
+    orientation_vector: NDArray[float],
+    mass_variable: str = "masses",
+) -> Tuple[unyt.unyt_quantity, NDArray[float]]:
+    """
+    Calculate kappa corot for the given particles and mass variable, using
+    the given masking strategy (which might depend on any of the
+    radii passed on as arguments), and respecting the orientation
+    vector determined earlier.
+
+    Returns the total specific angular momentum (vector norm) and kappa corot,
+    the ratio of the kinetic energy in ordered rotation and the total kinetic
+    energy in the same component.
+    """
 
     _, inner_aperture, outer_aperture, clipping = orientation_type.split("_")
 
@@ -230,7 +272,28 @@ def get_kappa_corot(
     return j, Kcorot / K
 
 
-def plot_morphology(output_path, observational_data_path, name_list, all_galaxies_list):
+def plot_morphology(
+    output_path: str,
+    observational_data_path: str,
+    name_list: List[str],
+    all_galaxies_list: Union[List["AllGalaxyData"], List["GalaxyData"]],
+) -> Dict:
+    """
+    Create morphology related plots.
+
+    Parameters:
+     - output_path: str
+       Directory where images should be created.
+     - observational_data_path: str
+       Path to the observational data repository data (i.e. velociraptor-comparison-data/data).
+     - name_list: List[str]
+       Name labels for all the simulations that need to be plotted.
+     - all_galaxies_list: Union[List[GalaxyData], List[AllGalaxyData]]
+       Data for all the simulations that need to be plotted (can be a single galaxy for
+       individual galaxy plots).
+
+    Returns an image data dictionary compatible with MorphologyConfig.add_images().
+    """
 
     plots = {}
 

@@ -1,12 +1,52 @@
+#!/usr/bin/env python3
+
+"""
+orientation.py
+
+Functions related to the orientation of galaxies.
+
+The orientation is determined exactly once for each galaxy,
+based on a strategy encoded in a string with the following format:
+  <component type>_<inner mask radius>_<outer mask radius>_<sigma clipping>
+where:
+ - component type can be stars, gas, ISM, HI, baryons
+ - inner mask radius can be 0xR0.5, 0.5R0.5
+ - outer mask radius can be R0.5, 2xR0.5, 4xR0.5, 50kpc, R200crit, 0.1Rvir
+ - sigma clipping can be 0sigma (no clipping), 1sigma, 2sigma
+
+This file contains a number of functions that can be called in other
+parts of the pipeline to make particle selections that are consistent
+with this string.
+
+The orientation itself is given by the total angular momentum vector of
+the selected component, after applying all the masks.
+"""
+
 import numpy as np
 from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
 from swiftsimio.objects import cosmo_array
 import unyt
 
+from typing import Tuple
+from numpy.typing import NDArray
+from swiftsimio import SWIFTDataset
+
 
 def get_orientation_mask(
-    radius, half_mass_radius, R200crit, Rvir, inner_aperture, outer_aperture
-):
+    radius: unyt.unyt_array,
+    half_mass_radius: unyt.unyt_quantity,
+    R200crit: unyt.unyt_quantity,
+    Rvir: unyt.unyt_quantity,
+    inner_aperture: str,
+    outer_aperture: str,
+) -> NDArray[bool]:
+    """
+    Mask out the given particle radii by applying a mask consistent
+    with the orientation method.
+
+    Returns the resulting mask.
+    """
+
     mask = None
     if inner_aperture == "0xR0.5":
         mask = np.ones(radius.shape, dtype=bool)
@@ -35,28 +75,16 @@ def get_orientation_mask(
     return mask
 
 
-def get_orientation_mask_radius(half_mass_radius, R200crit, Rvir, outer_aperture):
-    radius = None
-    if outer_aperture == "R0.5":
-        radius = half_mass_radius
-    elif outer_aperture == "2xR0.5":
-        radius = 2.0 * half_mass_radius
-    elif outer_aperture == "4xR0.5":
-        radius = 4.0 * half_mass_radius
-    elif outer_aperture == "50kpc":
-        radius = cosmo_array(
-            50.0 * unyt.kpc, comoving=False, cosmo_factor=half_mass_radius.cosmo_factor
-        )
-    elif outer_aperture == "R200crit":
-        radius = R200crit
-    elif outer_aperture == "0.1Rvir":
-        radius = 0.1 * Rvir
-    else:
-        raise RuntimeError(f"Unknown outer aperture: {outer_aperture}!")
-    return radius
+def get_mass_position_velocity_nomask(
+    data: SWIFTDataset, Ltype: str
+) -> Tuple[unyt.unyt_array, unyt.unyt_array, unyt.unyt_array]:
+    """
+    Get the masses, positions and velocities of all particles
+    that should be used for the orientation calculation.
 
-
-def get_mass_position_velocity_nomask(data, Ltype):
+    Depends on the first part of the orientation method string.
+    Does not apply any spatial masking.
+    """
 
     position = None
     velocity = None
@@ -114,8 +142,18 @@ def get_mass_position_velocity_nomask(data, Ltype):
 
 
 def get_mass_position_velocity(
-    data, half_mass_radius, R200crit, Rvir, orientation_type
-):
+    data: SWIFTDataset,
+    half_mass_radius: unyt.unyt_quantity,
+    R200crit: unyt.unyt_quantity,
+    Rvir: unyt.unyt_quantity,
+    orientation_type: str,
+) -> Tuple[unyt.unyt_array, unyt.unyt_array, unyt.unyt_array]:
+    """
+    Get the masses, positions and velocities of all particles
+    that should be used for the orientation calculation.
+
+    Also applies all spatial masking and sigma clipping.
+    """
 
     Ltype, inner_aperture, outer_aperture, clipping = orientation_type.split("_")
 
@@ -154,7 +192,22 @@ def get_mass_position_velocity(
     return mass, position, velocity
 
 
-def get_orientation_matrices(data, half_mass_radius, R200crit, Rvir, orientation_type):
+def get_orientation_matrices(
+    data: SWIFTDataset,
+    half_mass_radius: unyt.unyt_quantity,
+    R200crit: unyt.unyt_quantity,
+    Rvir: unyt.unyt_quantity,
+    orientation_type: str,
+) -> Tuple[NDArray[float], NDArray[float], NDArray[float]]:
+    """
+    Get the orientation of a galaxy based on the given particles and
+    orientation method string.
+
+    Returns the direction of the z axis (direction of total angular
+    momentum) and rotation matrices that can be used to produce
+    face-on and edge-on projections using swiftsimio projection
+    functions.
+    """
 
     mass, position, velocity = get_mass_position_velocity(
         data, half_mass_radius, R200crit, Rvir, orientation_type

@@ -1,3 +1,18 @@
+#!/usr/bin/env python3
+
+"""
+galaxy_data.py
+
+This file contains all the machinery needed to process individual
+galaxies: it defines the data type list used to construct the
+array with galaxy properties, and classes to efficiently handle
+this array, both for the full global galaxy array and the individual
+galaxy arrays.
+
+The actual computation for an individual galaxy is performed in the
+function process_galaxy() defined at the bottom of this file.
+"""
+
 import numpy as np
 from swiftsimio import load as load_snapshot
 from swiftsimio.objects import cosmo_array
@@ -25,6 +40,16 @@ from .galaxy_plots import plot_galaxy
 
 from functools import reduce
 
+from typing import Dict, List, Tuple, Union
+from numpy.typing import NDArray
+
+# list of integrated galaxy properties, i.e. each galaxy only has one
+# of these
+# each element has a name that can be used to access the property, and
+# a numpy compatible data type, can be a sub-array, in which case a
+# (dtype, size) tuple is required
+# this list is passed on to numpy.array(dtype=) or numpy.zeros(dtype=)
+# to create structured arrays
 data_fields = [
     ("stellar_mass", np.float32),
     ("half_mass_radius_star", np.float32),
@@ -57,7 +82,16 @@ data_fields = [
     ("HI_mass", np.float32),
 ]
 
+# dictionary containing information for combined
+# integrated galaxy quantities
+# these quantities are binned in a 2D histogram that
+# covers a pre-defined plotting space, such that we
+# can compute a reasonably accurate approximation to the
+# actual median of these quantities without the need to
+# store all the individual data points
 medians = {}
+# for brevity, we append individual plots in logical chunks:
+# - spatially resolved and azimuthally averaged KS plots
 for type, label in [
     ("neutral", "$\\Sigma{}_{{\\rm{}HI}+{\\rm{}H2}}$"),
     ("HI", "$\\Sigma{}_{\\rm{}HI}$"),
@@ -89,6 +123,7 @@ for type, label in [
                 "x label": label,
                 "y label": "$\\Sigma{}_{{\\rm{}SFR}}}$",
             }
+# - Schruba like plots
 for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
     medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"] = {
         "number of bins x": 20,
@@ -115,6 +150,7 @@ for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
         "y label": "$\\Sigma{}_{\\rm{}H2}/\\Sigma{}_{\\rm{}HI}$",
     }
 
+# - Sanchez like plots
 medians["H2_to_star_vs_star_spatial"] = {
     "number of bins x": 20,
     "log x": True,
@@ -152,6 +188,9 @@ medians["SFR_to_star_vs_star_spatial"] = {
     "y label": "$\\Sigma{}_{\\rm{}SFR}/\\Sigma{}_{\\bigstar{}}$",
 }
 
+# construct a structured array data type for the median arrays
+# using the information from the dictionary
+# do not edit this code unless you know what you are doing!
 median_data_fields = []
 for median in medians:
     median_data_fields.append(
@@ -164,14 +203,47 @@ for median in medians:
 
 
 class GalaxyData:
+    """
+    Data array for a single galaxy.
+    """
+
+    # Normal (integrated) data
+    data: NDArray[data_fields]
+    # Median (resolved) data
+    median_data: NDArray[median_data_fields]
+    # Post-processed medians (only used for individual galaxy plots)
+    medians: Dict
+
     def __init__(self):
+        """
+        Constructor.
+        """
         self.data = np.zeros(1, dtype=data_fields)
         self.median_data = np.zeros(1, dtype=median_data_fields)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Union[float, NDArray[float]]:
+        """
+        Access the given property for this galaxy.
+
+        The return type is either a single scalar or sub-array for
+        vector properties.
+        """
         return self.data[0][key]
 
-    def __setitem__(self, key, value):
+    def __setitem__(
+        self,
+        key: Union[str, List[str]],
+        value: Union[Union[float, NDArray[float]], List[Union[float, NDArray[float]]]],
+    ):
+        """
+        Set the given property/properties for this galaxy.
+
+        If a list of keys is given, the values should be a list of the same length.
+        The value for each key should be compatible with the shape of the underlying
+        element, i.e. scalar properties require a scalar value, vector properties can
+        be set to either a vector of the same size, or to a single scalar value (which
+        is then applied to each element).
+        """
         if isinstance(key, list):
             if len(key) != len(value):
                 raise RuntimeError(
@@ -182,15 +254,22 @@ class GalaxyData:
         else:
             self.data[0][key] = value
 
-    def accumulate_median_data(self, key, values_x, values_y):
+    def accumulate_median_data(
+        self, key: str, values_x: unyt.unyt_array, values_y: unyt.unyt_array
+    ):
+        """
+        Bin the given x and y values in the 2D histogram for the appropriate median
+        indicated by the key.
+        """
         self.median_data[0][key] = accumulate_median_data(
             medians[key], values_x, values_y
         )
 
-    def get_median_data(self, key):
-        return self.median_data[0][key]
-
     def compute_medians(self):
+        """
+        Post-process the 2D histograms for this galaxy to get approximate
+        median lines.
+        """
         self.medians = {}
         for key in medians:
             xvals, yvals = compute_median(medians[key], self.median_data[0][key])
@@ -203,12 +282,36 @@ class GalaxyData:
 
 
 class AllGalaxyData:
-    def __init__(self, number_of_galaxies):
+    """
+    Global data array for all galaxies.
+
+    Only one of these objects should exist for a simulation,
+    but multiple can exist in comparison mode.
+
+    Objects can be created empty, or be initialised from a
+    metadata file.
+    """
+
+    # Normal (integrated) data
+    data: NDArray[data_fields]
+    # Median (resolved) data
+    median_data: NDArray[median_data_fields]
+    # Post-processed medians
+    medians: Dict
+
+    def __init__(self, number_of_galaxies: int):
+        """
+        Constructor. Requires the number of galaxies.
+        """
         self.data = np.zeros(number_of_galaxies, dtype=data_fields)
         self.median_data = None
         self.medians = None
 
-    def fromfile(filename):
+    def fromfile(filename: str) -> "AllGalaxyData":
+        """
+        File "constructor": creates a class instance based
+        on a metadata file.
+        """
         with open(filename, "r") as handle:
             datadict = yaml.safe_load(handle)
         number_of_galaxies = datadict["Number of galaxies"]
@@ -220,17 +323,29 @@ class AllGalaxyData:
         all_galaxies.medians = datadict["Median lines"]
         return all_galaxies
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> NDArray[float]:
+        """
+        Get the full array for all galaxies of the given quantity.
+        """
         return self.data[key]
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Human friendly string displayed when print()ing an object.
+        """
         return (
             "Galaxy data object containing the following:\n"
             f" - variables: {list(self.data.dtype.fields)}\n"
             f" - medians: {list(self.medians.keys())}"
         )
 
-    def __setitem__(self, index, galaxy_data):
+    def __setitem__(self, index: int, galaxy_data: NDArray[data_fields]):
+        """
+        Set the galaxy properties for the galaxy with the given index.
+        For integrated quantities, we simply overwrite the corresponding
+        row in the global array.
+        For median data histograms, we add the counts for this galaxy.
+        """
         self.data[index] = galaxy_data.data[0]
         if self.median_data is None:
             self.median_data = np.zeros(1, dtype=median_data_fields)
@@ -238,6 +353,9 @@ class AllGalaxyData:
             self.median_data[0][key] += galaxy_data.median_data[0][key]
 
     def compute_medians(self):
+        """
+        Post-process the 2D histograms to get approximate median lines.
+        """
         self.medians = {}
         for key in medians:
             xvals, yvals = compute_median(medians[key], self.median_data[0][key])
@@ -248,7 +366,10 @@ class AllGalaxyData:
                 **medians[key],
             }
 
-    def output(self, output_name):
+    def output(self, output_name: str):
+        """
+        Dump the data to a metadata file with the given name.
+        """
         datadict = {"Number of galaxies": self.data.shape[0], "Galaxy properties": {}}
         for key in self.data.dtype.fields:
             datadict["Galaxy properties"][key] = self.data[key].tolist()
@@ -258,7 +379,21 @@ class AllGalaxyData:
             yaml.safe_dump(datadict, handle)
 
 
-def process_galaxy(args):
+def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
+    """
+    Main galaxy analysis function.
+    Called exactly once for every galaxy in the simulation. Executed by
+    an isolated subprocess that only has access to the variables in the
+    'args' argument.
+    This function is meant to be used in multiprocessing.Pool.imap_unordered() and
+    conforms to its expected function signature.
+
+    Returns:
+     - the galaxy index in the FilteredCatalogue list
+     - the galaxy data (will be put in AllGalaxyData[index])
+     - a dictionary of images that will be appended to the images dictionary,
+       or None if there are no individual images for this galaxy (most common case)
+    """
 
     # unpack arguments
     # note that we have to use this approach because
@@ -276,10 +411,13 @@ def process_galaxy(args):
         main_log,
     ) = args
 
+    # obtain a GalaxyLog for this galaxy and this subprocess
     galaxy_log = main_log.get_galaxy_log(galaxy_index)
 
+    # create an empty data array for this galaxy
     galaxy_data = GalaxyData()
 
+    # (re)load the catalogue to read the properties of this particular galaxy
     # we need to disregard the units to avoid problems with the SFR unit
     catalogue = load_catalogue(catalogue_filename, disregard_units=True)
     groups = load_groups(
@@ -287,12 +425,15 @@ def process_galaxy(args):
         catalogue=catalogue,
     )
 
+    # get the particles belonging to this galaxy
     particles, _ = groups.extract_halo(halo_index=galaxy_index)
-
+    # turn this information into a swiftsimio mask and read the data
+    # using swiftsimio
     data, mask = to_swiftsimio_dataset(
         particles, snapshot_filename, generate_extra_mask=True
     )
     # mask out all particles that are actually bound to the galaxy
+    # while at it: convert everything to physical coordinates
     for parttype in ["gas", "dark_matter", "stars", "black_holes"]:
         fields = reduce(
             getattr, f"metadata.{parttype}_properties.field_names".split("."), data
@@ -311,6 +452,8 @@ def process_galaxy(args):
                 setattr(group, field, vals)
 
     # get some properties from the catalogue
+    # convert these to swiftsimio.cosmo_arrays to suppress
+    # warnings about mixing variables with and without scale factors
     galaxy_center = cosmo_array(
         unyt.unyt_array(
             [
@@ -334,6 +477,7 @@ def process_galaxy(args):
         cosmo_factor=data.gas.velocities.cosmo_factor,
     )
 
+    # store some of the catalogue properties directly into the galaxy data array
     galaxy_data["stellar_mass"] = cosmo_array(
         catalogue.apertures.mass_star_50_kpc[galaxy_index].to("Msun"),
         comoving=False,
@@ -346,10 +490,13 @@ def process_galaxy(args):
         cosmo_factor=data.gas.coordinates.cosmo_factor,
     )
 
+    # provide some information to the user
     galaxy_log.message(
         f"Galaxy {galaxy_index}: stellar mass: {galaxy_data['stellar_mass']:.2e}"
     )
 
+    # get other radius quantities from the catalogue that the orientation
+    # calculation might use
     Rhalf = cosmo_array(
         catalogue.apertures.rhalfmass_star_50_kpc[galaxy_index],
         comoving=False,
@@ -373,6 +520,7 @@ def process_galaxy(args):
         cosmo_factor=data.gas.coordinates.cosmo_factor,
     ).to_physical()
 
+    # compute some derived quantities and apply some conversions
     data.gas.HI_mass = (
         data.gas.species_fractions.HI
         * data.gas.element_mass_fractions.hydrogen
@@ -423,6 +571,10 @@ def process_galaxy(args):
         data, Rhalf, R200crit, Rvir, orientation_type
     )
 
+    # done with the pre-processing:
+    # now compute the morphology quantities:
+
+    # - axis ratios and angular momenta
     (a, b, c), z_axis = get_axis_lengths_reduced_tensor(galaxy_log, data.stars, Rhalf)
     if (a > 0.0) and (b > 0.0) and (c > 0.0):
         galaxy_data["stars_axis_ca_reduced"] = c / a
@@ -492,6 +644,7 @@ def process_galaxy(args):
         mass_variable="H_neutral_mass",
     )
 
+    # - KS related quantities
     galaxy_data[
         ["sigma_HI", "sigma_H2", "sigma_neutral", "sigma_SFR"]
     ] = calculate_integrated_surface_densities(
@@ -599,11 +752,14 @@ def process_galaxy(args):
                     f"sigma_{name}_SFR_azimuthal_{Zmask}", sigma[mask], sigma_SFR[mask]
                 )
 
+    # - HI size
     galaxy_data[["HI_size", "HI_mass"]] = calculate_HI_size(
         galaxy_log, data, face_on_rmatrix, gas_mask, index
     )
 
+    # if requested, create invidiual plots for this galaxy
     if make_plots:
+        # images
         images = {
             f"ZZZ - Galaxy {galaxy_index}": plot_galaxy(
                 catalogue,
@@ -615,6 +771,7 @@ def process_galaxy(args):
                 output_path,
             )
         }
+        # individual KS plots
         galaxy_data.compute_medians()
         KS_images = plot_KS_relations(
             output_path,

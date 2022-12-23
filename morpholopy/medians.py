@@ -1,15 +1,43 @@
+#!/usr/bin/env python3
+
+"""
+medians.py
+
+Core functions to deal with 2D histogrammed medians.
+
+Medians are represented by a dictionary that contains all
+the necessary information about the plotting area, the
+quantities involved and the binning strategy.
+They are also represented by a numpy array of 2D histogram
+number counts, and derived (approximate) median lines.
+
+See the README for a more thorough explanation.
+"""
+
 import numpy as np
 import unyt
 import matplotlib
 
 from .plot import plot_broken_line_on_axis
 
+from typing import Dict, Tuple
+from numpy.typing import NDArray
 
-def accumulate_median_data(median, values_x, values_y):
 
+def accumulate_median_data(
+    median: Dict, values_x: unyt.unyt_array, values_y: unyt.unyt_array
+) -> NDArray[int]:
+    """
+    Bin the given x and y values into the 2D histogram for the given median.
+    Returns the number counts in each bin.
+    """
+
+    # use copies of x and y to avoid changing the originals
     xval = values_x.copy()
     yval = values_y.copy()
 
+    # convert to log space if required, mask out negative values
+    # in this case
     if median["log x"]:
         mask = xval > 0.0
         xval = np.log10(xval[mask])
@@ -29,6 +57,7 @@ def accumulate_median_data(median, values_x, values_y):
     mask = (xval >= range_x[0]) & (xval <= range_x[1])
     xval = xval[mask]
     yval = yval[mask]
+    # compute the grid indices of each pair of values
     index_x = np.clip(
         np.floor((xval - range_x[0]) / (range_x[1] - range_x[0]) * nx), 0, nx - 1
     )
@@ -48,38 +77,65 @@ def accumulate_median_data(median, values_x, values_y):
     return counts.reshape((nx, ny))
 
 
-def compute_median(median, median_data):
+def compute_median(
+    median: Dict, median_data: NDArray
+) -> Tuple[NDArray[float], NDArray[float]]:
+    """
+    Compute an (approximate) median line from the given 2D histogram.
+
+    Returns the x bin centres and the y median values.
+    """
+
     nx = median["number of bins x"]
     ny = median["number of bins y"]
     range_x = median["range in x"]
     range_y = median["range in y"]
 
+    # recover the median bins
     xbin_edges = np.linspace(range_x[0], range_x[1], nx + 1)
     ybin_edges = np.linspace(range_y[0], range_y[1], ny + 1)
     xbin_centres = 0.5 * (xbin_edges[:-1] + xbin_edges[1:])
 
+    # convert the columns (fixed x, variable y) into cumulative
+    # number counts
     ycum_counts = np.cumsum(median_data, axis=1)
+    # get the target value in each column
     median_target = ycum_counts[:, -1] / 2
+    # now find the edges that contain the median by counting values
+    # below and above the target
     is_below_target = ycum_counts < median_target[:, None]
     is_above_target = ycum_counts > median_target[:, None]
     ymed_idx_m = np.clip(np.argmin(is_below_target, axis=1), 0, ny - 1)
     ymed_idx_p = np.clip(np.argmax(is_above_target, axis=1) + 1, 1, ny)
 
+    # get the y edges and convert to log space if necessary
     ym = ybin_edges[ymed_idx_m]
     yp = ybin_edges[ymed_idx_p]
     if median["log y"]:
         ym = 10.0 ** ym
         yp = 10.0 ** yp
+    # take the centre of the bin as the approximate value for the median
     ymedian = 0.5 * (ym + yp)
 
     if median["log x"]:
         xbin_centres = 10.0 ** xbin_centres
 
+    # mask out empty bins; these do not have a median
     ymedian[median_target == 0] = np.nan
     return xbin_centres, ymedian
 
 
-def plot_median_on_axis_as_line(ax, median, color, linestyle="-", marker="o"):
+def plot_median_on_axis_as_line(
+    ax: matplotlib.axis.Axis,
+    median: Dict,
+    color: str,
+    linestyle: str = "-",
+    marker: str = "o",
+) -> matplotlib.lines.Line2D:
+    """
+    Plot the given median on the given axis as a (broken) line (see plot.py,
+    plot_broken_line_on_axis()), using the given color, line style and marker.
+    """
 
     x = unyt.unyt_array(median["x centers"], median["x units"])
     x.name = median.get("x label", "")
@@ -110,7 +166,14 @@ def plot_median_on_axis_as_line(ax, median, color, linestyle="-", marker="o"):
     return line
 
 
-def plot_median_on_axis_as_pdf(ax, median):
+def plot_median_on_axis_as_pdf(ax: matplotlib.axis.Axis, median: Dict):
+    """
+    Plot the given median on the given axis as an approximate PDF.
+
+    We simply plot the 2D histogram used to compute the median.
+    We use a transparency level of 50% to avoid cluttering the image
+    too much and make sure the PDF is displayed in the background.
+    """
 
     range_x = median["range in x"]
     range_y = median["range in y"]
@@ -153,6 +216,9 @@ def plot_median_on_axis_as_pdf(ax, median):
 
 
 def test_median():
+    """
+    Unit test for the median functions.
+    """
 
     import scipy.stats as stats
 
@@ -328,4 +394,7 @@ def test_median():
 
 
 if __name__ == "__main__":
+    """
+    Standalone mode: run the unit test.
+    """
     test_median()

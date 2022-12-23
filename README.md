@@ -86,9 +86,9 @@ mass_variable_gas: apertures.mass_gas_30_kpc
 
 # parameters for the selection of galaxies that are plotted
 # on an individual basis
-# only galaxies within a mass range are eligble for plotting
+# only galaxies within a mass range are eligible for plotting
 # the number of galaxies that gets plotted is limited
-# if the number of eligble galaxies is larger, we select a
+# if the number of eligible galaxies is larger, we select a
 # random subset
 plotting_lower_mass_limit_in_Msun: 1.e10
 plotting_upper_mass_limit_in_Msun: 1.e12
