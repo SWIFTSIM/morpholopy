@@ -14,8 +14,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as pl
 
 
-def get_new_axis_lengths(
-    galaxy_log, partdata, half_mass_radius, mass_variable="masses"
+def get_axis_lengths_tensor(
+    galaxy_log,
+    partdata,
+    half_mass_radius,
+    mass_variable="masses",
+    reduced=True,
+    iterative=True,
 ):
 
     all_position = partdata.coordinates
@@ -27,10 +32,14 @@ def get_new_axis_lengths(
     mass = all_mass[mask]
     radius = all_radius[mask]
 
-    weight = unyt.unyt_array(np.zeros(mass.shape), mass.units / radius.units ** 2)
-    weight[radius > 0.0] = (mass[radius > 0.0] / radius[radius > 0.0] ** 2).to(
-        weight.units
-    )
+    weight = None
+    if reduced:
+        weight = unyt.unyt_array(np.zeros(mass.shape), mass.units / radius.units ** 2)
+        weight[radius > 0.0] = (mass[radius > 0.0] / radius[radius > 0.0] ** 2).to(
+            weight.units
+        )
+    else:
+        weight = unyt.unyt_array(mass)
 
     if weight.sum() == 0.0:
         galaxy_log.debug("Total weight of 0, so not calculating axis lengths.")
@@ -57,6 +66,11 @@ def get_new_axis_lengths(
     axes = axes[isort]
     basis = basis[isort]
 
+    if not iterative:
+        # we got the result we wanted, return
+        return axes, basis[2].real
+
+    # we need to continue iterating
     R2 = (0.5 * half_mass_radius) ** 2
 
     if (axes[0] == 0.0) or (axes[1] == 0.0) or (axes[2] == 0.0):
@@ -97,10 +111,15 @@ def get_new_axis_lengths(
 
         radius = np.sqrt((position ** 2).sum(axis=1))
 
-        weight = unyt.unyt_array(np.zeros(mass.shape), mass.units / radius.units ** 2)
-        weight[radius > 0.0] = (mass[radius > 0.0] / radius[radius > 0.0] ** 2).to(
-            weight.units
-        )
+        if reduced:
+            weight = unyt.unyt_array(
+                np.zeros(mass.shape), mass.units / radius.units ** 2
+            )
+            weight[radius > 0.0] = (mass[radius > 0.0] / radius[radius > 0.0] ** 2).to(
+                weight.units
+            )
+        else:
+            weight = unyt.unyt_array(mass)
 
         if weight.sum() == 0.0:
             galaxy_log.debug(
@@ -136,6 +155,32 @@ def get_new_axis_lengths(
         b_a = axes[1] / axes[0]
 
     return axes, basis[2].real
+
+
+def get_axis_lengths_reduced_tensor(
+    galaxy_log, partdata, half_mass_radius, mass_variable="masses"
+):
+    return get_axis_lengths_tensor(
+        galaxy_log,
+        partdata,
+        half_mass_radius,
+        mass_variable,
+        reduced=True,
+        iterative=True,
+    )
+
+
+def get_axis_lengths_normal_tensor(
+    galaxy_log, partdata, half_mass_radius, mass_variable="masses"
+):
+    return get_axis_lengths_tensor(
+        galaxy_log,
+        partdata,
+        half_mass_radius,
+        mass_variable,
+        reduced=False,
+        iterative=True,
+    )
 
 
 def get_kappa_corot(
@@ -319,8 +364,8 @@ def plot_morphology(output_path, observational_data_path, name_list, all_galaxie
         },
     }
 
-    fig_gas, ax_gas = pl.subplots(1, 3, figsize=(11, 3.5))
-    fig_star, ax_star = pl.subplots(1, 3, figsize=(11, 3.5))
+    fig_gas, ax_gas = pl.subplots(2, 3, figsize=(11.0, 7.0))
+    fig_star, ax_star = pl.subplots(2, 3, figsize=(11.0, 7.0))
 
     sim_lines = []
     sim_labels = []
@@ -330,34 +375,39 @@ def plot_morphology(output_path, observational_data_path, name_list, all_galaxie
         for j, (dname, dlabel) in enumerate(
             [("axis_ca", "c/a"), ("axis_cb", "c/b"), ("axis_ba", "b/a")]
         ):
-            ratio_star = unyt.unyt_array(data[f"stars_{dname}"], unyt.dimensionless)
-            ratio_star.name = f"Stellar {dlabel}"
-            ratio_gas = unyt.unyt_array(data[f"gas_{dname}"], unyt.dimensionless)
-            ratio_gas.name = f"Gas {dlabel}"
+            for k, type in enumerate(["reduced", "normal"]):
+                ratio_star = unyt.unyt_array(
+                    data[f"stars_{dname}_{type}"], unyt.dimensionless
+                )
+                ratio_star.name = f"Stellar {dlabel} ({type} tensor)"
+                ratio_gas = unyt.unyt_array(
+                    data[f"gas_{dname}_{type}"], unyt.dimensionless
+                )
+                ratio_gas.name = f"Gas {dlabel} ({type} tensor)"
 
-            line = plot_data_on_axis(
-                ax_star[j],
-                Mstar,
-                ratio_star,
-                color=f"C{i}",
-                plot_scatter=(len(name_list) == 1),
-                log_y=False,
-            )
-            if j == 0:
-                sim_lines.append(line)
-                sim_labels.append(name)
-            line = plot_data_on_axis(
-                ax_gas[j],
-                Mstar,
-                ratio_gas,
-                color=f"C{i}",
-                plot_scatter=(len(name_list) == 1),
-                log_y=False,
-            )
+                line = plot_data_on_axis(
+                    ax_star[k][j],
+                    Mstar,
+                    ratio_star,
+                    color=f"C{i}",
+                    plot_scatter=(len(name_list) == 1),
+                    log_y=False,
+                )
+                if j == 0 and k == 0:
+                    sim_lines.append(line)
+                    sim_labels.append(name)
+                line = plot_data_on_axis(
+                    ax_gas[k][j],
+                    Mstar,
+                    ratio_gas,
+                    color=f"C{i}",
+                    plot_scatter=(len(name_list) == 1),
+                    log_y=False,
+                )
 
-    ax_star[1].set_title("Stellar component")
-    ax_gas[1].set_title("HI+H2 gas")
-    for ax in [*ax_gas, *ax_star]:
+    ax_star[0][1].set_title("Stellar component")
+    ax_gas[0][1].set_title("HI+H2 gas")
+    for ax in [*ax_gas.flatten(), *ax_star.flatten()]:
         ax.grid(True)
         ax.set_xlim(1.0e6, 1.0e12)
         ax.set_ylim(0.0, 1.0)

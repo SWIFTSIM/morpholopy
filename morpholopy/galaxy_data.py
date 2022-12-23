@@ -7,7 +7,11 @@ from velociraptor.swift.swift import to_swiftsimio_dataset
 import unyt
 import yaml
 
-from .morphology import get_new_axis_lengths, get_kappa_corot
+from .morphology import (
+    get_axis_lengths_reduced_tensor,
+    get_axis_lengths_normal_tensor,
+    get_kappa_corot,
+)
 from .orientation import get_orientation_matrices
 from .KS import (
     calculate_integrated_surface_densities,
@@ -27,16 +31,24 @@ data_fields = [
     ("stars_kappa_co", np.float32),
     ("stars_momentum", np.float32),
     ("orientation_vector", (np.float32, 3)),
-    ("stars_axis_ca", np.float32),
-    ("stars_axis_cb", np.float32),
-    ("stars_axis_ba", np.float32),
-    ("stars_z_axis", (np.float32, 3)),
+    ("stars_axis_ca_reduced", np.float32),
+    ("stars_axis_cb_reduced", np.float32),
+    ("stars_axis_ba_reduced", np.float32),
+    ("stars_z_axis_reduced", (np.float32, 3)),
+    ("stars_axis_ca_normal", np.float32),
+    ("stars_axis_cb_normal", np.float32),
+    ("stars_axis_ba_normal", np.float32),
+    ("stars_z_axis_normal", (np.float32, 3)),
     ("gas_kappa_co", np.float32),
     ("gas_momentum", np.float32),
-    ("gas_axis_ca", np.float32),
-    ("gas_axis_cb", np.float32),
-    ("gas_axis_ba", np.float32),
-    ("gas_z_axis", (np.float32, 3)),
+    ("gas_axis_ca_reduced", np.float32),
+    ("gas_axis_cb_reduced", np.float32),
+    ("gas_axis_ba_reduced", np.float32),
+    ("gas_z_axis_reduced", (np.float32, 3)),
+    ("gas_axis_ca_normal", np.float32),
+    ("gas_axis_cb_normal", np.float32),
+    ("gas_axis_ba_normal", np.float32),
+    ("gas_z_axis_normal", (np.float32, 3)),
     ("sigma_HI", np.float32),
     ("sigma_H2", np.float32),
     ("sigma_neutral", np.float32),
@@ -411,27 +423,65 @@ def process_galaxy(args):
         data, Rhalf, R200crit, Rvir, orientation_type
     )
 
-    (a, b, c), z_axis = get_new_axis_lengths(galaxy_log, data.stars, Rhalf)
+    (a, b, c), z_axis = get_axis_lengths_reduced_tensor(galaxy_log, data.stars, Rhalf)
+    if (a > 0.0) and (b > 0.0) and (c > 0.0):
+        galaxy_data["stars_axis_ca_reduced"] = c / a
+        galaxy_data["stars_axis_cb_reduced"] = c / b
+        galaxy_data["stars_axis_ba_reduced"] = b / a
+        galaxy_data["stars_z_axis_reduced"] = z_axis
+    else:
+        galaxy_data["stars_axis_ca_reduced"] = np.nan
+        galaxy_data["stars_axis_cb_reduced"] = np.nan
+        galaxy_data["stars_axis_ba_reduced"] = np.nan
+        galaxy_data["stars_z_axis_reduced"][:] = np.nan
+
+    (a, b, c), z_axis = get_axis_lengths_normal_tensor(galaxy_log, data.stars, Rhalf)
+    if (a > 0.0) and (b > 0.0) and (c > 0.0):
+        galaxy_data["stars_axis_ca_normal"] = c / a
+        galaxy_data["stars_axis_cb_normal"] = c / b
+        galaxy_data["stars_axis_ba_normal"] = b / a
+        galaxy_data["stars_z_axis_normal"] = z_axis
+    else:
+        galaxy_data["stars_axis_ca_normal"] = np.nan
+        galaxy_data["stars_axis_cb_normal"] = np.nan
+        galaxy_data["stars_axis_ba_normal"] = np.nan
+        galaxy_data["stars_z_axis_normal"][:] = np.nan
+
     stars_momentum, kappa_corot = get_kappa_corot(
         data.stars, Rhalf, R200crit, Rvir, orientation_type, orientation_vector
     )
-    if (a > 0.0) and (b > 0.0) and (c > 0.0):
-        galaxy_data["stars_axis_ca"] = c / a
-        galaxy_data["stars_axis_cb"] = c / b
-        galaxy_data["stars_axis_ba"] = b / a
-        galaxy_data["stars_z_axis"] = z_axis
     galaxy_data["stars_kappa_co"] = kappa_corot
     galaxy_data["orientation_vector"] = orientation_vector
     galaxy_data["stars_momentum"] = stars_momentum
 
-    (a, b, c), z_axis = get_new_axis_lengths(
+    (a, b, c), z_axis = get_axis_lengths_reduced_tensor(
         galaxy_log, data.gas, Rhalf, mass_variable="H_neutral_mass"
     )
     if (a > 0.0) and (b > 0.0) and (c > 0.0):
-        galaxy_data["gas_axis_ca"] = c / a
-        galaxy_data["gas_axis_cb"] = c / b
-        galaxy_data["gas_axis_ba"] = b / a
-        galaxy_data["gas_z_axis"] = z_axis
+        galaxy_data["gas_axis_ca_reduced"] = c / a
+        galaxy_data["gas_axis_cb_reduced"] = c / b
+        galaxy_data["gas_axis_ba_reduced"] = b / a
+        galaxy_data["gas_z_axis_reduced"] = z_axis
+    else:
+        galaxy_data["gas_axis_ca_reduced"] = np.nan
+        galaxy_data["gas_axis_cb_reduced"] = np.nan
+        galaxy_data["gas_axis_ba_reduced"] = np.nan
+        galaxy_data["gas_z_axis_reduced"][:] = np.nan
+
+    (a, b, c), z_axis = get_axis_lengths_normal_tensor(
+        galaxy_log, data.gas, Rhalf, mass_variable="H_neutral_mass"
+    )
+    if (a > 0.0) and (b > 0.0) and (c > 0.0):
+        galaxy_data["gas_axis_ca_normal"] = c / a
+        galaxy_data["gas_axis_cb_normal"] = c / b
+        galaxy_data["gas_axis_ba_normal"] = b / a
+        galaxy_data["gas_z_axis_normal"] = z_axis
+    else:
+        galaxy_data["gas_axis_ca_normal"] = np.nan
+        galaxy_data["gas_axis_cb_normal"] = np.nan
+        galaxy_data["gas_axis_ba_normal"] = np.nan
+        galaxy_data["gas_z_axis_normal"][:] = np.nan
+
     galaxy_data[["gas_momentum", "gas_kappa_co"]] = get_kappa_corot(
         data.gas,
         Rhalf,

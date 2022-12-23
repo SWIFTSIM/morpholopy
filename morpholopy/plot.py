@@ -57,7 +57,10 @@ def plot_data_on_axis(
         xbin_edges = 10.0 ** xbin_edges
         xbin_centres = 10.0 ** xbin_centres
 
-    median, _, _ = stats.binned_statistic(x, y, statistic="median", bins=xbin_edges)
+    mask = (~np.isnan(x)) & (~np.isnan(y))
+    median, _, _ = stats.binned_statistic(
+        x[mask], y[mask], statistic="median", bins=xbin_edges
+    )
 
     xbin_centres = unyt.unyt_array(xbin_centres, units=x.units)
     xbin_centres.name = x.name
