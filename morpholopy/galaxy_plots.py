@@ -24,6 +24,7 @@ from swiftsimio.visualisation.smoothing_length_generation import (
 from swiftsimio import swift_cosmology_to_astropy
 from astropy.visualization import make_lupton_rgb
 
+from scipy.optimize import curve_fit
 
 cmRdBu = plt.get_cmap("RdYlBu_r")
 Sigma_min = 0.0
@@ -71,6 +72,48 @@ cmap = plt.get_cmap("Blues")
 userblue = cmap(0.7)
 
 
+def exponential(x, Sigma0, H, offset):
+    return Sigma0 * np.exp(-np.abs(x + offset) / H)
+
+def calculate_scaleheight_pointmasses(zcoords, weights, zrange, resolution):
+
+    S_1D, bin_edges = np.histogram(zcoords, bins = resolution, range = (-zrange, zrange),
+                        weights = weights, density = False)
+
+    z_1D = (bin_edges[1:] + bin_edges[:-1])/2.
+    p0 = (hist.max(), 1., 0.)
+
+    try:
+        popt, pcov = curve_fit(
+                exponential, z_1D[np.isfinite(S_1D)], S_1D[np.isfinite(S_1D)]
+        )
+    except:
+        return np.nan
+
+    return popt[1]
+        
+
+def calculate_scaleheight_fit(mass_map, r_img_kpc, r_abs_max_kpc):
+    xx = np.linspace(
+        -r_img_kpc.value, r_img_kpc.value, len(mass_map[:, 0]), endpoint=True
+    )
+    z = (np.tile(xx, (len(xx), 1))).T
+    z_1D = np.ravel(z[:, (np.abs(xx) < r_abs_max_kpc)])
+    S_1D = np.ravel(mass_map[:, (np.abs(xx) < r_abs_max_kpc)])
+
+    p0 = (mass_map.max(), 1., 0.)
+
+    try:
+        popt, pcov = curve_fit(
+                exponential, z_1D[np.isfinite(S_1D)], S_1D[np.isfinite(S_1D)],
+                bounds = ( (0., 1.e-5, -5.), (np.inf, 100., +5.) )
+        )
+    except:
+        return np.nan
+
+    return popt[1]
+
+
 def sci_notation(num, decimal_digits=1, precision=None, exponent=None):
     """
     Returns a string representation of the scientific
@@ -80,7 +123,10 @@ def sci_notation(num, decimal_digits=1, precision=None, exponent=None):
     to show). The exponent to be used can also be specified
     explicitly.
     """
-    try:
+
+    if num == 0:
+        return "0"
+    else:
         if exponent is None:
             exponent = int(np.floor(np.log10(np.abs(num))))
         coeff = np.round(num / float(10 ** exponent), decimal_digits)
@@ -88,10 +134,6 @@ def sci_notation(num, decimal_digits=1, precision=None, exponent=None):
             precision = decimal_digits
 
         return r"${0:.{2}f}\times10^{{{1:d}}}$".format(coeff, exponent, precision)
-
-    except:
-        return "0"
-
 
 def get_stars_surface_brightness_map(
     catalogue,
@@ -205,7 +247,7 @@ def get_stars_surface_brightness_map(
             mass_map_edge[mass_map_edge == 0.0] = 1.0e-10
 
         try:
-            H_kpc_gri[ilum] = calculate_scaleheight_fit(mass_map_edge.T, r_img_kpc)
+            H_kpc_gri[ilum] = calculate_scaleheight_fit(mass_map_edge.T, r_img_kpc, 7.5)
         except:
             H_kpc_gri[ilum] = -1.0
         rgb_image_edge[:, :, ilum] = mass_map_edge.T
@@ -482,10 +524,16 @@ def plot_galaxy(
     output_path,
 ):
 
+    FLTMIN = np.nextafter(np.float32(0), np.float32(1))
+    if FLTMIN == 0.:
+        #if shared objects are compiled with e.g. fast math
+        FLTMIN = 1.e-30
+
     fig = plt.figure(figsize=(15.0, 3.5))
-    fig.subplots_adjust(left=0.01, right=0.95, top=0.85, bottom=0.12)
+    #fig.subplots_adjust(left=0.01, right=0.95, top=0.85, bottom=0.12)
     gs = gridspec.GridSpec(
-        2, nr_total_plots, wspace=0.0, hspace=0.15, height_ratios=[0.05, 1.0]
+        2, nr_total_plots, wspace=0.0, hspace=0.15, height_ratios=[0.05, 1.0],
+        figure = fig
     )
 
     # General information
@@ -689,7 +737,7 @@ def plot_galaxy(
     )
     ax.add_artist(circle)
     try:
-        H_kpc = calculate_scaleheight_fit(mass_map_edge.value)
+        H_kpc = calculate_scaleheight_fit(mass_map_edge.value, r_img_kpc, 7.5)
         ax.text(
             0.5,
             0.2,
@@ -733,8 +781,8 @@ def plot_galaxy(
     mass_map_face.convert_to_units("Msun / pc**2")
     mass_map_edge.convert_to_units("Msun / pc**2")
     mass_map_face_plot_H2 = mass_map_face  # save for H2 ratio plot
-    mass_map_face_plot = np.log10(mass_map_face.value)
-    mass_map_edge_plot = np.log10(mass_map_edge.value)
+    mass_map_face_plot = np.log10(np.maximum(mass_map_face.value, FLTMIN))
+    mass_map_edge_plot = np.log10(np.maximum(mass_map_edge.value, FLTMIN))
     ax.tick_params(labelleft=False, labelbottom=False)
     ax.set_xticks([])
     ax.set_yticks([])
@@ -764,7 +812,7 @@ def plot_galaxy(
     )
     ax.add_artist(circle)
     try:
-        H_kpc = calculate_scaleheight_fit(mass_map_edge.value)
+        H_kpc = calculate_scaleheight_fit(mass_map_edge.value, r_img_kpc, 7.5)
         ax.text(
             0.5,
             0.2,

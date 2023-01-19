@@ -8,7 +8,10 @@ Morphology related plots: axis lengths and angular momenta.
 
 import numpy as np
 import unyt
+import swiftsimio as sw
 from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
+from swiftsimio import SWIFTDataset
+
 from .orientation import get_orientation_mask
 from .plot import plot_data_on_axis
 import matplotlib
@@ -19,7 +22,155 @@ import matplotlib.pyplot as pl
 from typing import Dict, List, Tuple, Union
 from numpy.typing import NDArray
 from .logging import GalaxyLog
+from .medians import plot_median_on_axis_as_line
 
+from scipy.optimize import curve_fit
+
+def exponential(x, Sigma0, H, offset):
+    return Sigma0 * np.exp(-np.abs(x + offset) / H)
+
+def calculate_scaleheight_from_points(zcoords, weights, img_size, resolution):
+    img_size.convert_to_units('kpc')
+    zcoords.convert_to_units('kpc')
+
+    S_1D, bin_edges = np.histogram(zcoords.value, bins = resolution, 
+                        range = (-img_size.value/2., img_size.value/2.),
+                        weights = weights.value, density = False)
+
+    z_1D = (bin_edges[1:] + bin_edges[:-1])/2.
+    p0 = (S_1D.max(), 1., 0.)
+
+    try:
+        popt, pcov = curve_fit(
+                exponential, z_1D[np.isfinite(S_1D)], S_1D[np.isfinite(S_1D)],
+                bounds = ( (S_1D.max()/10., 1.e-5, -5.), (S_1D.max()*10., 100., +5.) )
+        )
+    except:
+        return np.nan
+
+    return popt[1]
+
+def calculate_scaleheight_from_map(mass_map, img_size):
+    img_size.convert_to_units('kpc')
+
+    xx = np.linspace(
+            -img_size.value/2., img_size.value/2., len(mass_map[:,0]), endpoint=True
+         )
+
+    z  = (np.tile(xx, (len(xx), 1))).T
+    z_1D = np.ravel(z)
+    S_1D = np.ravel(mass_map)
+    
+    p0 = (mass_map.max(), 1., 0.)
+
+    try:
+        popt, pcov = curve_fit(
+                exponential, z_1D[np.isfinite(S_1D)], S_1D[np.isfinite(S_1D)],
+                bounds = ( (0., 1.e-5, -5.), (np.inf, 100., +5.) )
+        )
+    except:
+        return np.nan
+
+    return popt[1]
+
+def get_scaleheight(
+    galaxy_log: GalaxyLog,
+    data: SWIFTDataset,
+    half_mass_radius: unyt.unyt_quantity,
+    edge_on_rmatrix: NDArray[float],
+    gas_mask: NDArray[bool],
+    stars_mask: NDArray[bool],
+    index: int,
+    scaleheight_binsize_kpc: float,
+) -> Tuple[unyt.unyt_quantity, unyt.unyt_quantity, unyt.unyt_quantity]: 
+
+    # Image size is 4 * half_mass_radius
+    # but at maximum 60 kpc (limited by 30 kpc aperture)
+    img_size =  sw.objects.cosmo_array( 
+        np.minimum(4. * half_mass_radius, 60. * unyt.kpc),
+        comoving=False,
+        cosmo_factor=data.gas.coordinates.cosmo_factor,
+    )    
+
+    maxbinsize = sw.objects.cosmo_array(
+        scaleheight_binsize_kpc, 
+        comoving=False,
+        cosmo_factor=data.gas.coordinates.cosmo_factor,
+    )
+
+    resolution = int(img_size / maxbinsize) + 1
+
+    rot_center = unyt.unyt_array(
+                    [0.0, 0.0, 0.0], units=data.gas.coordinates.units
+                 )
+
+    #########
+    # Gas
+    #########
+    # HI 
+    image_HI = sw.visualisation.project_gas(
+        data=data,
+        project="HI_mass",
+        resolution=resolution,
+        mask=gas_mask,
+        rotation_center=rot_center,
+        rotation_matrix=edge_on_rmatrix,
+        region=[-img_size/2., img_size/2., 
+                -img_size/2., img_size/2., 
+                -img_size/2., img_size/2.],
+    )
+    image_HI.convert_to_units("Msun/pc**2")
+    
+    # H2
+    image_H2 = sw.visualisation.project_gas(
+        data=data,
+        project="H2_mass",
+        resolution=resolution,
+        mask=gas_mask,
+        rotation_center=rot_center,
+        rotation_matrix=edge_on_rmatrix,
+        region=[-img_size/2., img_size/2.,
+                -img_size/2., img_size/2.,
+                -img_size/2., img_size/2.],
+    )
+    image_H2.convert_to_units("Msun/pc**2")
+
+    HImass = image_HI.sum() * (img_size/2. / resolution) ** 2
+    H2mass = image_H2.sum() * (img_size/2. / resolution) ** 2
+
+    if HImass == 0.0:
+        galaxy_log.debug("HI gas mass is zero, setting HI scaleheight to nan.")
+        H_HI_kpc = np.nan
+    else:
+        H_HI_kpc = calculate_scaleheight_from_map(image_HI.T.value, img_size)
+
+    if H2mass == 0.0:
+        galaxy_log.debug("H2 gas mass is zero, setting H2 scaleheight to nan.")
+        H_H2_kpc = np.nan
+    else:
+        H_H2_kpc = calculate_scaleheight_from_map(image_H2.T.value, img_size)
+
+    #########
+    # Stars
+    #########
+    # rotate stars coordinates
+    x, y, z = np.matmul(edge_on_rmatrix, (data.stars.coordinates[stars_mask] - rot_center).T)
+    x += rot_center[0]
+    y += rot_center[1]
+    z += rot_center[2]    
+
+    x.convert_to_units('kpc')
+    y.convert_to_units('kpc')
+    z.convert_to_units('kpc')
+    M = data.stars.masses[stars_mask]
+    M.convert_to_units('msun')
+
+    mask = (np.abs(x) <= img_size/2.)  & (np.abs(y) <= img_size/2.)
+
+    H_stars_kpc = calculate_scaleheight_from_points(y[mask], M[mask],
+                                                    img_size, resolution)
+
+    return [H_HI_kpc, H_H2_kpc, H_stars_kpc]
 
 def get_axis_lengths_tensor(
     galaxy_log: GalaxyLog,
@@ -270,6 +421,107 @@ def get_kappa_corot(
     j = np.sqrt((j ** 2).sum())
 
     return j, Kcorot / K
+
+
+def plot_scaleheights(
+    output_path: str,
+    observational_data_path: str,
+    name_list: List[str],
+    all_galaxies_list: Union[List["AllGalaxyData"], List["GalaxyData"]],
+) -> Dict:
+
+    HI_scaleheight_filename = "HI_scaleheight.png"
+    H2_scaleheight_filename = "H2_scaleheight.png"
+    Stars_scaleheight_filename = "Stars_scaleheight.png"
+
+    plots = {}
+
+    fig_HI, ax_HI = pl.subplots(1, 1)
+    fig_H2, ax_H2 = pl.subplots(1, 1)
+    fig_stars, ax_stars = pl.subplots(1, 1)
+
+    sim_lines = []
+    sim_labels = []
+    for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
+        Mstar = unyt.unyt_array(data["stellar_mass"], unyt.Msun).in_base("galactic")
+        Mstar.name = "Stellar Mass"
+        H_HI = unyt.unyt_array(data["HI_scaleheight"], unyt.kpc)
+        H_HI.name = "HI disk scale height"
+        H_H2 = unyt.unyt_array(data["H2_scaleheight"], unyt.kpc)
+        H_H2.name = "H2 disk scale height"
+        H_star = unyt.unyt_array(data["stars_scaleheight"], unyt.kpc)
+        H_star.name = "Stellar disk scale height (mass)"
+
+        mask_HI = (np.isfinite(H_HI) & (H_HI.value > 0.))
+        mask_H2 = (np.isfinite(H_H2) & (H_H2.value > 0.))
+        mask_star = (np.isfinite(H_star) & (H_star.value > 0.))
+
+        line = plot_data_on_axis(
+            ax_HI, Mstar[mask_HI], H_HI[mask_HI], color=f"C{i}", plot_scatter=(len(name_list) == 1)
+        )
+        sim_lines.append(line)
+        sim_labels.append(name)
+        line = plot_data_on_axis(
+            ax_H2, Mstar[mask_H2], H_H2[mask_H2], color=f"C{i}", plot_scatter=(len(name_list) == 1)
+        )
+        line = plot_data_on_axis(
+            ax_stars, Mstar[mask_star], H_star[mask_star], color=f"C{i}", plot_scatter=(len(name_list) == 1)
+        )
+
+    ax_HI.set_title("HI disk thickness")
+    ax_H2.set_title("H2 disk thickness")
+    ax_stars.set_title("Stellar disk thickness (mass)")
+    for ax in [ax_HI, ax_H2, ax_stars]:
+        ax.grid(True)
+        ax.set_xlim(1.0e6, 1.0e12)
+        ax.set_ylim(0.1, 1.0e2)
+        ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
+        sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
+        # uncomment this if observational data is added
+        # ax.legend(loc="lower right")
+        ax.add_artist(sim_legend)
+
+    fig_HI.savefig(f"{output_path}/{HI_scaleheight_filename}", dpi=300)
+    pl.close(fig_HI)
+
+    fig_H2.savefig(f"{output_path}/{H2_scaleheight_filename}", dpi=300)
+    pl.close(fig_H2)
+
+    fig_stars.savefig(f"{output_path}/{Stars_scaleheight_filename}", dpi=300)
+    pl.close(fig_stars)
+
+    plots["Disk scale height"] = {
+        HI_scaleheight_filename: {
+            "title": "HI disk scale height",
+            "caption": (
+                "Scale height of the HI disk from fit to exponential profile"
+                " of edge-on image within 2 times the 3D stellar half mass radius."
+                " Half mass radius calculated from 50 kpc aperture."
+                " All galaxies with a successful fit are shown."
+            ),
+        },
+        H2_scaleheight_filename: {
+            "title": "H2 disk scale height",
+            "caption": (
+                "Scale height of the H2 disk from fit to exponential profile"
+                " of edge-on image within 2 times the 3D stellar half mass radius."
+                " Half mass radius calculated from 50 kpc aperture."
+                " All galaxies with a successful fit are shown."
+            ),
+        },
+        Stars_scaleheight_filename: {
+            "title": "Stellar disk scale height (mass)",
+            "caption": (
+                "Scale height of the H2 disk from fit to exponential profile"
+                " of edge-on image of the total stellar mass surface density"
+                " within 2 times the 3D stellar half mass radius."
+                " Half mass radius calculated from 50 kpc aperture."
+                " All galaxies with a successful fit are shown."
+            ),
+        },
+    }
+
+    return plots
 
 
 def plot_morphology(
