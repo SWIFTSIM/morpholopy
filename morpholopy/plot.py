@@ -67,7 +67,7 @@ def plot_data_on_axis(
     log_y: bool = True,
     linestyle: str = "-",
     marker: str = "o",
-    nbin: int = 20,
+    nbin: int = 10,
 ):
     """
     Plot the given x and y values on the given axis.

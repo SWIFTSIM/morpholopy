@@ -761,7 +761,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
     if make_plots:
         # images
         images = {
-            f"ZZZ - Galaxy {galaxy_index}": plot_galaxy(
+            f"Galaxy {galaxy_index}": plot_galaxy(
                 catalogue,
                 galaxy_index,
                 index,
@@ -782,7 +782,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
             always_plot_scatter=True,
             plot_integrated_quantities=False,
         )
-        images[f"ZZZ - Galaxy {galaxy_index}"].update(
+        images[f"Galaxy {galaxy_index}"].update(
             KS_images["Combined surface densities"]
         )
     else:

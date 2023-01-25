@@ -549,7 +549,10 @@ def plot_galaxy(
     ax.text(
         0.05,
         1.20,
-        "%i Galaxy" % (index + 1),
+        "%i Galaxy" % (index + 1) +
+        f" [r = ({catalogue.positions.xcmbp[halo_id].to('Mpc').value:.02f}, "
+        + f"{catalogue.positions.ycmbp[halo_id].to('Mpc').value:.02f}, "
+        + f"{catalogue.positions.zcmbp[halo_id].to('Mpc').value:.02f}) cMpc]",
         ha="left",
         va="bottom",
         transform=ax.transAxes,
