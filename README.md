@@ -104,6 +104,9 @@ plotting_random_seed: 42
 # equal to scaleheight_binsize_kpc
 scaleheight_binsize_kpc: 0.02
 
+# minimum mass to attempt fitting the scaleheight
+scaleheight_lower_mass_limit_in_Msun: 1.e7
+
 # method used to determine the axis for face-on and edge-on projections:
 # string consisting of:
 #  <component type>_<inner mask radius>_<outer mask radius>_<sigma clipping>

@@ -25,9 +25,100 @@ from .logging import GalaxyLog
 from .medians import plot_median_on_axis_as_line
 
 from scipy.optimize import curve_fit
+from scipy import stats
+
+from unyt import proton_mass_cgs as mH
 
 def exponential(x, Sigma0, H, offset):
     return Sigma0 * np.exp(-np.abs(x + offset) / H)
+
+###################################################################
+# see e.g. Eq. 4 of Smith et al. (https://arxiv.org/pdf/2301.08265.pdf)
+# but added the option for an offset
+###################################################################
+def exponential_density(z, n0, H, offset):
+    return n0 * np.exp(- np.power(z + offset, 2) / (2. * np.power(H, 2)))
+
+
+###################################################################
+# Calculate the scaleheight of the gas volume density 
+# input:
+#   zcoords: the coordinates of the particle positions perpendicular to the disk;
+#            this routine assumes that the particle selection, the rotation of the
+#            galaxy into an edge-on view and the translation so that the center of the 
+#            galaxy is at (0,0,0) - or close to it - is already taken care of
+#   densities: gas densities in particles per volume; can be e.g. n_H, n_HI, n_H2, ...
+#   img_size: size of the selection region
+#   resolution: number of vertical bins
+#   index: halo id for debugging
+###################################################################
+def calculate_scaleheight_from_densities(zcoords, densities, img_size, resolution, index):
+    # bounds for fitting:
+    # scale height H needs to be between H_bound_min_kpc and H_bound_max_kpc kpc;
+    # a non-zero H_bound_min_kpc is particularly important to avoid division by 0
+    # The maximum bound should be set generously because the fit will be discarded
+    # if the fitted scale height equals H_bound_max_kpc
+    H_bound_min_kpc = 0.01
+    H_bound_max_kpc = 10.
+
+    # offset needs be within [-absoffset_bound_kpc, absoffset_bound_kpc]
+    # this is also used to validate the fit. If the fitted offset lies exactly
+    # at the bound, something went wrong
+    absoffset_bound_kpc = 5.
+
+    # no gas - no scaleheight
+    if len(densities) == 0:
+        return np.nan
+
+    # make sure everything is in the right units
+    img_size.convert_to_units('kpc')
+    zcoords.convert_to_units('kpc')
+    densities.convert_to_units('cm**-3')
+
+    # no ISM gas - no scaleheight
+    if densities.value.max() < 0.1:
+        return np.nan
+
+    vert = np.asarray(zcoords, dtype = np.float64)
+    dens = np.asarray(densities, dtype = np.float64)
+
+    # bin the data in bins of zcoords and get both the mean density and 
+    # the standard deviation of each bin
+    mean_density, bin_edges, binnumber = stats.binned_statistic(vert, dens, statistic = "mean",
+                                          bins = resolution, 
+                                          range = (-img_size.value/2., img_size.value/2.))
+
+    # convert arrays to float64 as mentioned in the notes of scipy.optimize.curve_fit
+    z_1D = np.asarray((bin_edges[1:] + bin_edges[:-1])/2., dtype = np.float64)
+    mean = np.asarray(mean_density, dtype = np.float64)
+
+    if np.sum(np.isfinite(mean)) == 0: 
+        scaleheight = np.nan
+    else:
+        meanmax = mean[np.isfinite(mean)].max()
+        maskbins = np.isfinite(mean) 
+        p0 = (meanmax, 1., 0.)
+
+        try:
+            popt, pcov = curve_fit(
+                    exponential_density, z_1D[maskbins], mean[maskbins],
+                    bounds = ( (meanmax/10., H_bound_min_kpc, -1. * absoffset_bound_kpc), 
+                               (meanmax*10., H_bound_max_kpc, +1. * absoffset_bound_kpc) ) )
+        except:
+            scaleheight =  np.nan
+        else:
+            scaleheight = popt[1]
+            # It is not a good sign if the 
+            # found fitting parameter is right at the boundary; 
+            # assume that the fit is bad in this case
+            if np.abs(1. - np.abs(popt[2]) / absoffset_bound_kpc) < 0.01:
+                scaleheight = np.nan
+            elif np.abs(1. - popt[1] / H_bound_max_kpc) < 0.01:
+                scaleheight = np.nan
+            else:
+                scaleheight = popt[1]
+
+    return scaleheight
 
 def calculate_scaleheight_from_points(zcoords, weights, img_size, resolution):
     img_size.convert_to_units('kpc')
@@ -82,6 +173,7 @@ def get_scaleheight(
     stars_mask: NDArray[bool],
     index: int,
     scaleheight_binsize_kpc: float,
+    scaleheight_lower_mass_limit_in_Msun: float,
 ) -> Tuple[unyt.unyt_quantity, unyt.unyt_quantity, unyt.unyt_quantity]: 
 
     # Image size is 4 * half_mass_radius
@@ -98,6 +190,12 @@ def get_scaleheight(
         cosmo_factor=data.gas.coordinates.cosmo_factor,
     )
 
+    minimum_mass = sw.objects.cosmo_array(
+        scaleheight_lower_mass_limit_in_Msun,
+        comoving=False,
+        cosmo_factor=data.gas.masses.cosmo_factor,
+    )
+
     resolution = int(img_size / maxbinsize) + 1
 
     rot_center = unyt.unyt_array(
@@ -107,48 +205,48 @@ def get_scaleheight(
     #########
     # Gas
     #########
-    # HI 
-    image_HI = sw.visualisation.project_gas(
-        data=data,
-        project="HI_mass",
-        resolution=resolution,
-        mask=gas_mask,
-        rotation_center=rot_center,
-        rotation_matrix=edge_on_rmatrix,
-        region=[-img_size/2., img_size/2., 
-                -img_size/2., img_size/2., 
-                -img_size/2., img_size/2.],
-    )
-    image_HI.convert_to_units("Msun/pc**2")
+    # rotate gas coordinates
+    x, y, z = np.matmul(edge_on_rmatrix, (data.gas.coordinates[gas_mask] - rot_center).T)
+    x += rot_center[0]
+    y += rot_center[1]
+    z += rot_center[2]
+
+    x.convert_to_units('kpc')
+    y.convert_to_units('kpc')
+    z.convert_to_units('kpc')
+
+    # get gas species densities; do in steps to prevent overflow
+    nHI = data.gas.densities[gas_mask] * data.gas.species_fractions.HI[gas_mask]
+    nHI.convert_to_cgs()
+    nHI /= mH
+
+    MHI = data.gas.masses[gas_mask] * data.gas.species_fractions.HI[gas_mask]
+    MHI.convert_to_units("msun")
+
+    nH2 = data.gas.densities[gas_mask] * data.gas.species_fractions.H2[gas_mask]
+    nH2.convert_to_cgs()
+    nH2 /= mH
+
+    MH2 = data.gas.masses[gas_mask] * data.gas.species_fractions.H2[gas_mask] * 2.
+    MH2.convert_to_units("msun")
+
+    mask = (np.abs(x) <= img_size/2.)  & (np.abs(y) <= img_size/2.) & (np.abs(z) <= img_size/2.)
+
+    # Only calculate scale heights if the HI mass within the analysed cube is
+    # above the minimum mass set in the config file 
+    if np.sum(MHI[mask]) >= minimum_mass:
+        H_HI_density_kpc = calculate_scaleheight_from_densities(y[mask], nHI[mask],
+                                                                img_size, resolution, index)
+    else:
+        H_HI_density_kpc = np.nan
     
-    # H2
-    image_H2 = sw.visualisation.project_gas(
-        data=data,
-        project="H2_mass",
-        resolution=resolution,
-        mask=gas_mask,
-        rotation_center=rot_center,
-        rotation_matrix=edge_on_rmatrix,
-        region=[-img_size/2., img_size/2.,
-                -img_size/2., img_size/2.,
-                -img_size/2., img_size/2.],
-    )
-    image_H2.convert_to_units("Msun/pc**2")
-
-    HImass = image_HI.sum() * (img_size/2. / resolution) ** 2
-    H2mass = image_H2.sum() * (img_size/2. / resolution) ** 2
-
-    if HImass == 0.0:
-        galaxy_log.debug("HI gas mass is zero, setting HI scaleheight to nan.")
-        H_HI_kpc = np.nan
+    # Only calculate scale heights if the H2 mass within the analysed cube is
+    # above the minimum mass set in the config file 
+    if np.sum(MH2[mask]) >= minimum_mass:
+        H_H2_density_kpc = calculate_scaleheight_from_densities(y[mask], nH2[mask],
+                                                                img_size, resolution, index)
     else:
-        H_HI_kpc = calculate_scaleheight_from_map(image_HI.T.value, img_size)
-
-    if H2mass == 0.0:
-        galaxy_log.debug("H2 gas mass is zero, setting H2 scaleheight to nan.")
-        H_H2_kpc = np.nan
-    else:
-        H_H2_kpc = calculate_scaleheight_from_map(image_H2.T.value, img_size)
+        H_H2_density_kpc = np.nan
 
     #########
     # Stars
@@ -170,7 +268,11 @@ def get_scaleheight(
     H_stars_kpc = calculate_scaleheight_from_points(y[mask], M[mask],
                                                     img_size, resolution)
 
-    return [H_HI_kpc, H_H2_kpc, H_stars_kpc]
+    galaxy_log.debug("Scaleheights: H_HI = %.2f kpc, H_H2 = %.2f kpc, H_stars = %.2f kpc"
+                    %(H_HI_density_kpc, H_H2_density_kpc, H_stars_kpc))
+    
+
+    return [H_HI_density_kpc, H_H2_density_kpc, H_stars_kpc]
 
 def get_axis_lengths_tensor(
     galaxy_log: GalaxyLog,
@@ -434,11 +536,27 @@ def plot_scaleheights(
     H2_scaleheight_filename = "H2_scaleheight.png"
     Stars_scaleheight_filename = "Stars_scaleheight.png"
 
+    HI_scaleheight_active_filename = "HI_scaleheight_active.png"
+    H2_scaleheight_active_filename = "H2_scaleheight_active.png"
+    Stars_scaleheight_active_filename = "Stars_scaleheight_active.png"
+
+    HI_scaleheight_passive_filename = "HI_scaleheight_passive.png"
+    H2_scaleheight_passive_filename = "H2_scaleheight_passive.png"
+    Stars_scaleheight_passive_filename = "Stars_scaleheight_passive.png"
+
     plots = {}
 
     fig_HI, ax_HI = pl.subplots(1, 1)
     fig_H2, ax_H2 = pl.subplots(1, 1)
     fig_stars, ax_stars = pl.subplots(1, 1)
+
+    fig_HI_a, ax_HI_a = pl.subplots(1, 1)
+    fig_H2_a, ax_H2_a = pl.subplots(1, 1)
+    fig_stars_a, ax_stars_a = pl.subplots(1, 1)
+
+    fig_HI_p, ax_HI_p = pl.subplots(1, 1)
+    fig_H2_p, ax_H2_p = pl.subplots(1, 1)
+    fig_stars_p, ax_stars_p = pl.subplots(1, 1)
 
     sim_lines = []
     sim_labels = []
@@ -456,6 +574,14 @@ def plot_scaleheights(
         mask_H2 = (np.isfinite(H_H2) & (H_H2.value > 0.))
         mask_star = (np.isfinite(H_star) & (H_star.value > 0.))
 
+        mask_HI_a = (np.isfinite(H_HI) & (H_HI.value > 0.)) & (data["is_active"] == True)
+        mask_H2_a = (np.isfinite(H_H2) & (H_H2.value > 0.)) & (data["is_active"] == True)
+        mask_star_a = (np.isfinite(H_star) & (H_star.value > 0.)) & (data["is_active"] == True)
+
+        mask_HI_p = (np.isfinite(H_HI) & (H_HI.value > 0.)) & (data["is_active"] == False)
+        mask_H2_p = (np.isfinite(H_H2) & (H_H2.value > 0.)) & (data["is_active"] == False)
+        mask_star_p = (np.isfinite(H_star) & (H_star.value > 0.)) & (data["is_active"] == False)
+
         line = plot_data_on_axis(
             ax_HI, Mstar[mask_HI], H_HI[mask_HI], color=f"C{i}", plot_scatter=(len(name_list) == 1)
         )
@@ -468,13 +594,58 @@ def plot_scaleheights(
             ax_stars, Mstar[mask_star], H_star[mask_star], color=f"C{i}", plot_scatter=(len(name_list) == 1)
         )
 
+        # only add points if there is data
+        if np.sum(mask_HI_a) > 0:
+            print ("Number of data points for HI (active): ", np.sum(mask_HI_a))
+            line = plot_data_on_axis(
+                ax_HI_a, Mstar[mask_HI_a], H_HI[mask_HI_a], color=f"C{i}", plot_scatter=(len(name_list) == 1)
+            )
+        if np.sum(mask_H2_a) > 0:
+            print ("Number of data points for H2 (active): ", np.sum(mask_H2_a))
+            line = plot_data_on_axis(
+                ax_H2_a, Mstar[mask_H2_a], H_H2[mask_H2_a], color=f"C{i}", plot_scatter=(len(name_list) == 1)
+            )
+        if np.sum(mask_star_a) > 0:
+            print ("Number of data points for star (active): ", np.sum(mask_star_a))
+            line = plot_data_on_axis(
+                ax_stars_a, Mstar[mask_star_a], H_star[mask_star_a], color=f"C{i}", plot_scatter=(len(name_list) == 1)
+            )
+
+        if np.sum(mask_HI_p) > 0:
+            print ("Number of data points for HI (passive): ", np.sum(mask_HI_p))
+            line = plot_data_on_axis(
+                ax_HI_p, Mstar[mask_HI_p], H_HI[mask_HI_p], color=f"C{i}", plot_scatter=(len(name_list) == 1)
+            )
+        if np.sum(mask_H2_p) > 0:
+            print ("Number of data points for H2 (passive): ", np.sum(mask_H2_p))
+            line = plot_data_on_axis(
+                ax_H2_p, Mstar[mask_H2_p], H_H2[mask_H2_p], color=f"C{i}", plot_scatter=(len(name_list) == 1)
+            )
+        if np.sum(mask_star_p) > 0:
+            print ("Number of data points for star (passive): ", np.sum(mask_star_p))
+            line = plot_data_on_axis(
+                ax_stars_p, Mstar[mask_star_p], H_star[mask_star_p], color=f"C{i}", plot_scatter=(len(name_list) == 1)
+            )
+
+
     ax_HI.set_title("HI disk thickness")
     ax_H2.set_title("H2 disk thickness")
     ax_stars.set_title("Stellar disk thickness (mass)")
-    for ax in [ax_HI, ax_H2, ax_stars]:
+
+    ax_HI_a.set_title("HI disk thickness (active)")
+    ax_H2_a.set_title("H2 disk thickness (active)")
+    ax_stars_a.set_title("Stellar disk thickness (mass) (active)")
+
+    ax_HI_p.set_title("HI disk thickness (passive)")
+    ax_H2_p.set_title("H2 disk thickness (passive)")
+    ax_stars_p.set_title("Stellar disk thickness (mass) (passive)")
+
+    for ax in [ax_HI, ax_H2, ax_stars, 
+               ax_HI_a, ax_H2_a, ax_stars_a, 
+               ax_HI_p, ax_H2_p, ax_stars_p ]:
         ax.grid(True)
         ax.set_xlim(1.0e6, 1.0e12)
-        ax.set_ylim(0.1, 1.0e2)
+        ax.set_ylim(0.01, 1.0e2)
         ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
         sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
         # uncomment this if observational data is added
@@ -489,6 +660,24 @@ def plot_scaleheights(
 
     fig_stars.savefig(f"{output_path}/{Stars_scaleheight_filename}", dpi=300)
     pl.close(fig_stars)
+
+    fig_HI_a.savefig(f"{output_path}/{HI_scaleheight_active_filename}", dpi=300)
+    pl.close(fig_HI_a)
+
+    fig_H2_a.savefig(f"{output_path}/{H2_scaleheight_active_filename}", dpi=300)
+    pl.close(fig_H2_a)
+
+    fig_stars_a.savefig(f"{output_path}/{Stars_scaleheight_active_filename}", dpi=300)
+    pl.close(fig_stars_a)
+
+    fig_HI_p.savefig(f"{output_path}/{HI_scaleheight_passive_filename}", dpi=300)
+    pl.close(fig_HI_p)
+
+    fig_H2_p.savefig(f"{output_path}/{H2_scaleheight_passive_filename}", dpi=300)
+    pl.close(fig_H2_p)
+
+    fig_stars_p.savefig(f"{output_path}/{Stars_scaleheight_passive_filename}", dpi=300)
+    pl.close(fig_stars_p)
 
     plots["Disk scale height"] = {
         HI_scaleheight_filename: {
@@ -513,12 +702,68 @@ def plot_scaleheights(
             "title": "Stellar disk scale height (mass)",
             "caption": (
                 "Scale height of the H2 disk from fit to exponential profile"
-                " of edge-on image of the total stellar mass surface density"
+                " of binned particle positions" 
                 " within 2 times the 3D stellar half mass radius."
                 " Half mass radius calculated from 50 kpc aperture."
                 " All galaxies with a successful fit are shown."
             ),
         },
+        HI_scaleheight_active_filename: {
+            "title": "HI disk scale height (active)",
+            "caption": (
+                "Scale height of the HI disk from fit to exponential profile"
+                " of edge-on image within 2 times the 3D stellar half mass radius."
+                " Half mass radius calculated from 50 kpc aperture."
+                " Only active galaxies with a successful fit are shown."
+            ),
+        },
+        H2_scaleheight_active_filename: {
+            "title": "H2 disk scale height (active)",
+            "caption": (
+                "Scale height of the H2 disk from fit to exponential profile"
+                " of edge-on image within 2 times the 3D stellar half mass radius."
+                " Half mass radius calculated from 50 kpc aperture."
+                " Only active galaxies with a successful fit are shown."
+            ),
+        },
+        Stars_scaleheight_active_filename: {
+            "title": "Stellar disk scale height (mass) (active)",
+            "caption": (
+                "Scale height of the H2 disk from fit to exponential profile"
+                " of binned particle positions"
+                " within 2 times the 3D stellar half mass radius."
+                " Half mass radius calculated from 50 kpc aperture."
+                " Only active galaxies with a successful fit are shown."
+            ),
+        },
+        HI_scaleheight_passive_filename: {
+            "title": "HI disk scale height (passive)",
+            "caption": (
+                "Scale height of the HI disk from fit to exponential profile"
+                " of edge-on image within 2 times the 3D stellar half mass radius."
+                " Half mass radius calculated from 50 kpc aperture."
+                " Only passive galaxies with a successful fit are shown."
+            ),
+        },
+        H2_scaleheight_passive_filename: {
+            "title": "H2 disk scale height (passive)",
+            "caption": (
+                "Scale height of the H2 disk from fit to exponential profile"
+                " of edge-on image within 2 times the 3D stellar half mass radius."
+                " Half mass radius calculated from 50 kpc aperture."
+                " Only passive galaxies with a successful fit are shown."
+            ),
+        },
+        Stars_scaleheight_passive_filename: {
+            "title": "Stellar disk scale height (mass) (passive)",
+            "caption": (
+                "Scale height of the H2 disk from fit to exponential profile"
+                " of binned particle positions"
+                " within 2 times the 3D stellar half mass radius."
+                " Half mass radius calculated from 50 kpc aperture."
+                " Only passive galaxies with a successful fit are shown."
+            ),  
+        },  
     }
 
     return plots
