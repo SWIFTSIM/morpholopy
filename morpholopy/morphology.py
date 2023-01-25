@@ -596,33 +596,27 @@ def plot_scaleheights(
 
         # only add points if there is data
         if np.sum(mask_HI_a) > 0:
-            print ("Number of data points for HI (active): ", np.sum(mask_HI_a))
             line = plot_data_on_axis(
                 ax_HI_a, Mstar[mask_HI_a], H_HI[mask_HI_a], color=f"C{i}", plot_scatter=(len(name_list) == 1)
             )
         if np.sum(mask_H2_a) > 0:
-            print ("Number of data points for H2 (active): ", np.sum(mask_H2_a))
             line = plot_data_on_axis(
                 ax_H2_a, Mstar[mask_H2_a], H_H2[mask_H2_a], color=f"C{i}", plot_scatter=(len(name_list) == 1)
             )
         if np.sum(mask_star_a) > 0:
-            print ("Number of data points for star (active): ", np.sum(mask_star_a))
             line = plot_data_on_axis(
                 ax_stars_a, Mstar[mask_star_a], H_star[mask_star_a], color=f"C{i}", plot_scatter=(len(name_list) == 1)
             )
 
         if np.sum(mask_HI_p) > 0:
-            print ("Number of data points for HI (passive): ", np.sum(mask_HI_p))
             line = plot_data_on_axis(
                 ax_HI_p, Mstar[mask_HI_p], H_HI[mask_HI_p], color=f"C{i}", plot_scatter=(len(name_list) == 1)
             )
         if np.sum(mask_H2_p) > 0:
-            print ("Number of data points for H2 (passive): ", np.sum(mask_H2_p))
             line = plot_data_on_axis(
                 ax_H2_p, Mstar[mask_H2_p], H_H2[mask_H2_p], color=f"C{i}", plot_scatter=(len(name_list) == 1)
             )
         if np.sum(mask_star_p) > 0:
-            print ("Number of data points for star (passive): ", np.sum(mask_star_p))
             line = plot_data_on_axis(
                 ax_stars_p, Mstar[mask_star_p], H_star[mask_star_p], color=f"C{i}", plot_scatter=(len(name_list) == 1)
             )
