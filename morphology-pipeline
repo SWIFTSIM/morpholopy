@@ -345,7 +345,7 @@ if __name__ == "__main__":
                     args.output,
                     observational_data_path,
                     config.scaleheight_binsize_kpc,
-                    config.scaleheight_lower_mass_limit_in_Msun,
+                    config.scaleheight_lower_gasmass_limit_in_number_of_particles,
                     config.orientation_method,
                     make_plots,
                     main_log,

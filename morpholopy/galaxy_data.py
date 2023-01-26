@@ -412,7 +412,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
         output_path,
         observational_data_path,
         scaleheight_binsize_kpc,
-        scaleheight_lower_mass_limit_in_Msun,
+        scaleheight_lower_gasmass_limit_in_number_of_particles,
         orientation_type,
         make_plots,
         main_log,
@@ -786,7 +786,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
     # - Scaleheight plots
     galaxy_data[["HI_scaleheight", "H2_scaleheight", "stars_scaleheight"]] = get_scaleheight(
             galaxy_log, data, Rhalf, edge_on_rmatrix, gas_mask, stars_mask, index, scaleheight_binsize_kpc,
-            scaleheight_lower_mass_limit_in_Msun
+            scaleheight_lower_gasmass_limit_in_number_of_particles
     )
     
 

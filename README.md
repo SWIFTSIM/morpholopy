@@ -104,8 +104,9 @@ plotting_random_seed: 42
 # equal to scaleheight_binsize_kpc
 scaleheight_binsize_kpc: 0.02
 
-# minimum mass to attempt fitting the scaleheight
-scaleheight_lower_mass_limit_in_Msun: 1.e7
+# minimum mass to attempt fitting the scaleheight in units
+# of the initial gas mass per particle
+scaleheight_lower_gasmass_limit_in_number_of_particles: 10
 
 # method used to determine the axis for face-on and edge-on projections:
 # string consisting of:

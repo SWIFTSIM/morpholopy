@@ -173,8 +173,10 @@ def get_scaleheight(
     stars_mask: NDArray[bool],
     index: int,
     scaleheight_binsize_kpc: float,
-    scaleheight_lower_mass_limit_in_Msun: float,
+    scaleheight_lower_gasmass_limit_in_number_of_particles: float,
 ) -> Tuple[unyt.unyt_quantity, unyt.unyt_quantity, unyt.unyt_quantity]: 
+
+    initial_gas_mass = data.metadata.initial_mass_table.gas.to("Solar_Mass")
 
     # Image size is 4 * half_mass_radius
     # but at maximum 60 kpc (limited by 30 kpc aperture)
@@ -191,7 +193,7 @@ def get_scaleheight(
     )
 
     minimum_mass = sw.objects.cosmo_array(
-        scaleheight_lower_mass_limit_in_Msun,
+        scaleheight_lower_gasmass_limit_in_number_of_particles * initial_gas_mass,
         comoving=False,
         cosmo_factor=data.gas.masses.cosmo_factor,
     )
