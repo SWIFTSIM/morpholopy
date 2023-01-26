@@ -496,6 +496,59 @@ def plot_galaxy(
         #if shared objects are compiled with e.g. fast math
         FLTMIN = 1.e-30
 
+    image_info =  "Image size: (%.1f x %.1f) kpc, "%(2. * r_img_kpc.value, 2. * r_img_kpc.value)
+    image_info += " resolution: (%i x %i) pixel."%(npix, npix) 
+
+
+    galaxy_info = (
+        " Coordinates (x,y,z) = "
+         + f"({catalogue.positions.xcmbp[halo_id].to('Mpc').value:.02f}, "
+         + f"{catalogue.positions.ycmbp[halo_id].to('Mpc').value:.02f}, "
+         + f"{catalogue.positions.zcmbp[halo_id].to('Mpc').value:.02f}) cMpc, "
+    )
+    galaxy_info += (
+        r"M$_{\mathrm{200,crit}}$ = "
+        + sci_notation(catalogue.masses.mass_200crit[halo_id].to("Msun").value)
+        + r" M$_{\odot}$, "
+    )
+    galaxy_info += (
+        r"M$_{\mathrm{*,30kpc}}$ = "
+        + sci_notation(catalogue.masses.mass_star_30kpc[halo_id].to("Msun").value)
+        + r" M$_{\odot}$, "
+    )
+    galaxy_info += (
+        r"M$_{\mathrm{gas,30kpc}}$ = "
+        + sci_notation(catalogue.masses.mass_gas_30kpc[halo_id].to("Msun").value)
+        + r" M$_{\odot}$, "
+    )
+    galaxy_info += (
+        r"M$_{\mathrm{HI,30kpc}}$ = "
+        + sci_notation(
+            catalogue.gas_hydrogen_species_masses.HI_mass_30_kpc[halo_id]
+            .to("Msun")
+            .value
+        )
+        + r" M$_{\odot}$, "
+    )
+    galaxy_info += (
+        r"M$_{\mathrm{H2,30kpc}}$ = "
+        + sci_notation(
+            catalogue.gas_hydrogen_species_masses.H2_mass_30_kpc[halo_id]
+            .to("Msun")
+            .value
+        )
+        + r" M$_{\odot}$, "
+    )
+    sSFR = (
+        catalogue.apertures.sfr_gas_100_kpc[halo_id]
+        / catalogue.apertures.mass_star_100_kpc[halo_id]
+    )
+    if np.isfinite(sSFR):
+        galaxy_info += (
+            r"sSFR$_{\mathrm{100}}$ = "
+            + sci_notation(sSFR.to("Gyr**(-1)").value)
+            + r" Gyr$^{-1}$"
+        )
 
     stars_faceon_filename = "galaxy_%3.3i_map_stars_faceon.png"%(index)
     stars_edgeon_filename = "galaxy_%3.3i_map_stars_edgeon.png"%(index)
@@ -622,23 +675,6 @@ def plot_galaxy(
         ax.tick_params(labelleft=False, labelbottom=False)
         ax.set_xticks([])
         ax.set_yticks([])
-        #ax.add_artist(circle)
-        ax.plot(
-            [x - lbar_kpc / 2.0, x + lbar_kpc / 2.0],
-            [y + ypos_bar, y + ypos_bar],
-            color="white",
-            linewidth=2,
-            linestyle="solid",
-        )
-        ax.text(
-            x,
-            y + ypos_bar,
-            "%i kpc" % (int(lbar_kpc.value)),
-            color="white",
-            verticalalignment="bottom",
-            horizontalalignment="center",
-        )
-
 
     fig_stars_faceon.savefig(f"{output_path}/{stars_faceon_filename}", dpi = 300)
     fig_stars_edgeon.savefig(f"{output_path}/{stars_edgeon_filename}", dpi = 300)
@@ -658,37 +694,57 @@ def plot_galaxy(
         stars_faceon_filename: {
             "title": "Stars (face-on)",
             "caption": (
-                            "Unattenuated gri image in face-on projection."
+                            "Unattenuated gri image in face-on projection. "
+                            + image_info
+                            + galaxy_info
             ),
         },
         stars_edgeon_filename: {
             "title": "Stars (edge-on)",
             "caption": (
-                            "Unattenuated gri image in edge-on projection."
+                            "Unattenuated gri image in edge-on projection. "
+                            + image_info
+                            + galaxy_info
             ),
         },
         HI_faceon_filename: {
             "title": "HI surface density (face-on)",
             "caption": (
-                            "HI surface density in log Msol / pc**2 in face-on projection."
+                            r"HI surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$,"
+                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                             "in face-on projection."
+                            + image_info
+                            + galaxy_info
             ),
         },
         HI_edgeon_filename: {
             "title": "HI surface density (edge-on)",
             "caption": (
-                            "HI surface density in log Msol / pc**2 in edge-on projection."
+                            r"HI surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
+                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                             "in edge-on projection."
+                            + image_info
+                            + galaxy_info
             ),
         },
         H2_faceon_filename: {
             "title": "H2 surface density (face-on)",
             "caption": (
-                            "H2 surface density in log Msol / pc**2 in face-on projection."
+                            r"H2 surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
+                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                             "in face-on projection."
+                            + image_info
+                            + galaxy_info
             ),
         },
         H2_edgeon_filename: {
             "title": "H2 surface density (edge-on)",
             "caption": (
-                            "H2 surface density in log Msol / pc**2 in edge-on projection."
+                            r"H2 surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
+                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                             "in edge-on projection."
+                            + image_info
+                            + galaxy_info
             ),
         },
     }
