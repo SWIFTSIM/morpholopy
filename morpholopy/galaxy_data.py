@@ -793,7 +793,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
     # if requested, create invidiual plots for this galaxy
     if make_plots:
         # images
-        images = {f"ZZZ - Galaxy {galaxy_index}": {}}
+        images = {f"ZZZ - Galaxy {galaxy_index:08d}": {}}
 
         galaxy_images = plot_galaxy(
                 catalogue,
@@ -804,7 +804,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
                 edge_on_rmatrix,
                 output_path,
             )
-        images[f"ZZZ - Galaxy {galaxy_index}"].update(
+        images[f"ZZZ - Galaxy {galaxy_index:08d}"].update(
             galaxy_images["Visualisation"]
         )
     
@@ -819,7 +819,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
             always_plot_scatter=True,
             plot_integrated_quantities=False,
         )
-        images[f"ZZZ - Galaxy {galaxy_index}"].update(
+        images[f"ZZZ - Galaxy {galaxy_index:08d}"].update(
             KS_images["Combined surface densities"]
         )
     else:
