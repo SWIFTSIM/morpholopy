@@ -614,7 +614,6 @@ def plot_galaxy(
     mass_map_face.convert_to_units("Msun / pc**2")
     mass_map_edge.convert_to_units("Msun / pc**2")
     mass_map_face_plot_HI = mass_map_face  # save for H2 ratio plot
-    totalmass_HI = totalmass  # save for H2 ratio plot
     mass_map_face_plot = np.log10(mass_map_face.value)
     mass_map_edge_plot = np.log10(mass_map_edge.value)
 
@@ -658,15 +657,6 @@ def plot_galaxy(
     im = ax_H2_edgeon.imshow(
         mass_map_edge_plot, cmap="Greens", extent=visualise_region, vmin=vmin, vmax=vmax
     )
-
-    circle = pl.Circle(
-        (x, y),
-        (0.99 * r_img_kpc.value) / 1000.0,
-        color="black",
-        fill=False,
-        linewidth=2,
-    )
-
 
     for ax in [ax_stars_faceon, ax_stars_edgeon, 
                ax_HI_faceon, ax_HI_edgeon, 
