@@ -794,7 +794,6 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
     if make_plots:
         # images
         images = {f"ZZZ - Galaxy {galaxy_index:08d}": {}}
-
         galaxy_images = plot_galaxy(
                 catalogue,
                 galaxy_index,
@@ -807,6 +806,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
         images[f"ZZZ - Galaxy {galaxy_index:08d}"].update(
             galaxy_images["Visualisation"]
         )
+        gallery_images = galaxy_images["Gallery"]
     
         # individual KS plots
         galaxy_data.compute_medians()
@@ -824,5 +824,6 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
         )
     else:
         images = None
+        gallery_images = None
 
-    return index, galaxy_data, images
+    return index, galaxy_data, images, gallery_images

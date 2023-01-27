@@ -499,6 +499,21 @@ def plot_galaxy(
     image_info =  "Image size: (%.1f x %.1f) kpc, "%(2. * r_img_kpc.value, 2. * r_img_kpc.value)
     image_info += " resolution: (%i x %i) pixel."%(npix, npix) 
 
+    galaxy_info_title = (
+        f"Galaxy {halo_id:08d} " 
+         + f"[ {catalogue.positions.xcmbp[halo_id].to('Mpc').value:.02f}, "
+         + f"{catalogue.positions.ycmbp[halo_id].to('Mpc').value:.02f}, "
+         + f"{catalogue.positions.zcmbp[halo_id].to('Mpc').value:.02f} ] cMpc"
+    )
+
+    galaxy_info_short = (
+        r"M$_{\mathrm{200,crit}}$ = "
+        + sci_notation(catalogue.masses.mass_200crit[halo_id].to("Msun").value)
+        + r" M$_{\odot}$, "
+        + r"M$_{\mathrm{*,30kpc}}$ = "
+        + sci_notation(catalogue.masses.mass_star_30kpc[halo_id].to("Msun").value)
+        + r" M$_{\odot}$, "
+    )
 
     galaxy_info = (
         " Coordinates (x,y,z) = "
@@ -679,6 +694,23 @@ def plot_galaxy(
     pl.close(fig_HI_edgeon)
     pl.close(fig_H2_faceon)
     pl.close(fig_H2_edgeon)
+
+    plots["Gallery"] = {
+        stars_faceon_filename: {
+            "title": galaxy_info_title,
+            "caption": (
+                            "Unattenuated gri image in face-on projection. "
+                            + galaxy_info_short
+            ),
+        },
+        stars_edgeon_filename: {
+            "title": galaxy_info_title,
+            "caption": (
+                            "Unattenuated gri image in edge-on projection. "
+                            + galaxy_info_short
+            ),
+        },
+    }
 
     plots["Visualisation"] = {
         stars_faceon_filename: {
