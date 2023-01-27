@@ -347,6 +347,7 @@ if __name__ == "__main__":
                     observational_data_path,
                     config.scaleheight_binsize_kpc,
                     config.scaleheight_lower_gasmass_limit_in_number_of_particles,
+                    config.plot_individual_KS_plots,
                     config.orientation_method,
                     make_plots,
                     main_log,

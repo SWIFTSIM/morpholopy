@@ -18,3 +18,5 @@ scaleheight_binsize_kpc: 0.02
 scaleheight_lower_gasmass_limit_in_number_of_particles: 10
 
 orientation_method: stars_0xR0.5_R0.5_0sigma
+
+plot_individual_KS_plots: 0

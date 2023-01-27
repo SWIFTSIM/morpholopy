@@ -413,6 +413,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
         observational_data_path,
         scaleheight_binsize_kpc,
         scaleheight_lower_gasmass_limit_in_number_of_particles,
+        plot_individual_KS_plots,
         orientation_type,
         make_plots,
         main_log,
@@ -808,20 +809,21 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
         )
         gallery_images = galaxy_images["Gallery"]
     
-        # individual KS plots
-        galaxy_data.compute_medians()
-        KS_images = plot_KS_relations(
-            output_path,
-            observational_data_path,
-            [f"Galaxy {galaxy_index}"],
-            [galaxy_data],
-            prefix=f"galaxy_{index:03d}_",
-            always_plot_scatter=True,
-            plot_integrated_quantities=False,
-        )
-        images[f"ZZZ - Galaxy {galaxy_index:08d}"].update(
-            KS_images["Combined surface densities"]
-        )
+        if plot_individual_KS_plots:
+            # individual KS plots
+            galaxy_data.compute_medians()
+            KS_images = plot_KS_relations(
+                output_path,
+                observational_data_path,
+                [f"Galaxy {galaxy_index}"],
+                [galaxy_data],
+                prefix=f"galaxy_{index:03d}_",
+                always_plot_scatter=True,
+                plot_integrated_quantities=False,
+            )
+            images[f"ZZZ - Galaxy {galaxy_index:08d}"].update(
+                KS_images["Combined surface densities"]
+            )
     else:
         images = None
         gallery_images = None
