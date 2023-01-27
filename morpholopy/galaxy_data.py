@@ -413,7 +413,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
         observational_data_path,
         scaleheight_binsize_kpc,
         scaleheight_lower_gasmass_limit_in_number_of_particles,
-        plot_individual_KS_plots,
+        make_individual_KS_plots,
         orientation_type,
         make_plots,
         main_log,
@@ -809,7 +809,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
         )
         gallery_images = galaxy_images["Gallery"]
     
-        if plot_individual_KS_plots:
+        if make_individual_KS_plots:
             # individual KS plots
             galaxy_data.compute_medians()
             KS_images = plot_KS_relations(

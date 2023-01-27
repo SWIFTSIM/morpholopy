@@ -110,7 +110,7 @@ scaleheight_lower_gasmass_limit_in_number_of_particles: 10
 
 # flag for extra plots:
 # set to 1 to plot additional KS plots for the individual galaxies
-plot_individual_KS_plots: 0
+make_individual_KS_plots: 0
 
 # method used to determine the axis for face-on and edge-on projections:
 # string consisting of:
