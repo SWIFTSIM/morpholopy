@@ -95,6 +95,19 @@ plotting_upper_mass_limit_in_Msun: 1.e12
 plotting_number_of_galaxies: 10
 plotting_random_seed: 42
 
+# the mass distribution perpendicular to the disk
+# is binned for the exponential fit to calculate the
+# scaleheight; the region used for the fit has a size
+# of 4 stellar half mass radii (from -2 Rhalf to +2 Rhalf);
+# the number of bins for each galaxy varies
+# so that for each galaxy the bin size is smaller or 
+# equal to scaleheight_binsize_kpc
+scaleheight_binsize_kpc: 0.02
+
+# minimum mass to attempt fitting the scaleheight in units
+# of the initial gas mass per particle
+scaleheight_lower_gasmass_limit_in_number_of_particles: 10
+
 # method used to determine the axis for face-on and edge-on projections:
 # string consisting of:
 #  <component type>_<inner mask radius>_<outer mask radius>_<sigma clipping>

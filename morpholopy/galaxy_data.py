@@ -26,6 +26,7 @@ from .morphology import (
     get_axis_lengths_reduced_tensor,
     get_axis_lengths_normal_tensor,
     get_kappa_corot,
+    get_scaleheight,
 )
 from .orientation import get_orientation_matrices
 from .KS import (
@@ -80,6 +81,10 @@ data_fields = [
     ("sigma_SFR", np.float32),
     ("HI_size", np.float32),
     ("HI_mass", np.float32),
+    ("is_active", np.int_),
+    ("HI_scaleheight", np.float32),
+    ("H2_scaleheight", np.float32),
+    ("stars_scaleheight", np.float32),
 ]
 
 # dictionary containing information for combined
@@ -406,6 +411,8 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
         snapshot_filename,
         output_path,
         observational_data_path,
+        scaleheight_binsize_kpc,
+        scaleheight_lower_gasmass_limit_in_number_of_particles,
         orientation_type,
         make_plots,
         main_log,
@@ -494,6 +501,25 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
     galaxy_log.message(
         f"Galaxy {galaxy_index}: stellar mass: {galaxy_data['stellar_mass']:.2e}"
     )
+
+    # Lowest sSFR below which the galaxy is considered passive
+    marginal_ssfr = unyt.unyt_quantity(1e-11, units=1 / unyt.year)
+    stellar_mass  = catalogue.apertures.mass_star_50_kpc[galaxy_index].to("Msun")
+    star_formation_rate = catalogue.apertures.sfr_gas_50_kpc[galaxy_index]
+
+    if stellar_mass == unyt.unyt_quantity(0., units= unyt.msun):
+        ssfr =  unyt.unyt_quantity(0., units= 1 / unyt.year)
+    else:
+        ssfr = star_formation_rate / stellar_mass
+        ssfr.convert_to_units("1/yr")
+
+    # Mask for the active objects
+    is_active = unyt.unyt_array(
+          (ssfr > (1.01 * marginal_ssfr).to(ssfr.units)).astype(np.int_),
+          units="dimensionless",
+    )
+
+    galaxy_data["is_active"] = is_active
 
     # get other radius quantities from the catalogue that the orientation
     # calculation might use
@@ -757,11 +783,19 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
         galaxy_log, data, face_on_rmatrix, gas_mask, index
     )
 
+    # - Scaleheight plots
+    galaxy_data[["HI_scaleheight", "H2_scaleheight", "stars_scaleheight"]] = get_scaleheight(
+            galaxy_log, data, Rhalf, edge_on_rmatrix, gas_mask, stars_mask, index, scaleheight_binsize_kpc,
+            scaleheight_lower_gasmass_limit_in_number_of_particles
+    )
+    
+
     # if requested, create invidiual plots for this galaxy
     if make_plots:
         # images
-        images = {
-            f"ZZZ - Galaxy {galaxy_index}": plot_galaxy(
+        images = {f"ZZZ - Galaxy {galaxy_index:08d}": {}}
+
+        galaxy_images = plot_galaxy(
                 catalogue,
                 galaxy_index,
                 index,
@@ -770,7 +804,10 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
                 edge_on_rmatrix,
                 output_path,
             )
-        }
+        images[f"ZZZ - Galaxy {galaxy_index:08d}"].update(
+            galaxy_images["Visualisation"]
+        )
+    
         # individual KS plots
         galaxy_data.compute_medians()
         KS_images = plot_KS_relations(
@@ -782,7 +819,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
             always_plot_scatter=True,
             plot_integrated_quantities=False,
         )
-        images[f"ZZZ - Galaxy {galaxy_index}"].update(
+        images[f"ZZZ - Galaxy {galaxy_index:08d}"].update(
             KS_images["Combined surface densities"]
         )
     else:

@@ -67,7 +67,7 @@ def plot_data_on_axis(
     log_y: bool = True,
     linestyle: str = "-",
     marker: str = "o",
-    nbin: int = 20,
+    nbin: int = 10,
 ):
     """
     Plot the given x and y values on the given axis.
@@ -127,7 +127,7 @@ def plot_data_on_axis(
     with unyt.matplotlib_support:
         if plot_scatter:
             # scale the alpha with the number of points
-            ax.plot(x, y, ".", color=color, alpha=1.0 / np.log10(x.shape[0]))
+            ax.plot(x, y, ".", color=color, alpha=np.minimum(1.0 / np.log10(x.shape[0]), 1.0))
 
         line = plot_broken_line_on_axis(
             ax, xbin_centres, median, color=color, linestyle=linestyle, marker=marker

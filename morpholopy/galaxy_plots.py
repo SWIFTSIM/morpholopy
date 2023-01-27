@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as pl
 from matplotlib import gridspec
 import unyt
 from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
@@ -24,8 +24,9 @@ from swiftsimio.visualisation.smoothing_length_generation import (
 from swiftsimio import swift_cosmology_to_astropy
 from astropy.visualization import make_lupton_rgb
 
+from scipy.optimize import curve_fit
 
-cmRdBu = plt.get_cmap("RdYlBu_r")
+cmRdBu = pl.get_cmap("RdYlBu_r")
 Sigma_min = 0.0
 Sigma_max = 99.0
 H2_over_HI_min = 10.0 ** (-1.9)
@@ -65,10 +66,52 @@ pixsize_kpc = r_img_kpc.value / npix
 bingrid = 0.8 * unyt.kpc
 npix_coarse = int(2.0 * r_img_kpc / bingrid)
 
-cmap = plt.get_cmap("Greens")
+cmap = pl.get_cmap("Greens")
 usergreen = cmap(0.7)
-cmap = plt.get_cmap("Blues")
+cmap = pl.get_cmap("Blues")
 userblue = cmap(0.7)
+
+
+def exponential(x, Sigma0, H, offset):
+    return Sigma0 * np.exp(-np.abs(x + offset) / H)
+
+def calculate_scaleheight_pointmasses(zcoords, weights, zrange, resolution):
+
+    S_1D, bin_edges = np.histogram(zcoords, bins = resolution, range = (-zrange, zrange),
+                        weights = weights, density = False)
+
+    z_1D = (bin_edges[1:] + bin_edges[:-1])/2.
+    p0 = (hist.max(), 1., 0.)
+
+    try:
+        popt, pcov = curve_fit(
+                exponential, z_1D[np.isfinite(S_1D)], S_1D[np.isfinite(S_1D)]
+        )
+    except:
+        return np.nan
+
+    return popt[1]
+        
+
+def calculate_scaleheight_fit(mass_map, r_img_kpc, r_abs_max_kpc):
+    xx = np.linspace(
+        -r_img_kpc.value, r_img_kpc.value, len(mass_map[:, 0]), endpoint=True
+    )
+    z = (np.tile(xx, (len(xx), 1))).T
+    z_1D = np.ravel(z[:, (np.abs(xx) < r_abs_max_kpc)])
+    S_1D = np.ravel(mass_map[:, (np.abs(xx) < r_abs_max_kpc)])
+
+    p0 = (mass_map.max(), 1., 0.)
+
+    try:
+        popt, pcov = curve_fit(
+                exponential, z_1D[np.isfinite(S_1D)], S_1D[np.isfinite(S_1D)],
+                bounds = ( (0., 1.e-5, -5.), (np.inf, 100., +5.) )
+        )
+    except:
+        return np.nan
+
+    return popt[1]
 
 
 def sci_notation(num, decimal_digits=1, precision=None, exponent=None):
@@ -80,7 +123,10 @@ def sci_notation(num, decimal_digits=1, precision=None, exponent=None):
     to show). The exponent to be used can also be specified
     explicitly.
     """
-    try:
+
+    if num == 0:
+        return "0"
+    else:
         if exponent is None:
             exponent = int(np.floor(np.log10(np.abs(num))))
         coeff = np.round(num / float(10 ** exponent), decimal_digits)
@@ -88,10 +134,6 @@ def sci_notation(num, decimal_digits=1, precision=None, exponent=None):
             precision = decimal_digits
 
         return r"${0:.{2}f}\times10^{{{1:d}}}$".format(coeff, exponent, precision)
-
-    except:
-        return "0"
-
 
 def get_stars_surface_brightness_map(
     catalogue,
@@ -164,11 +206,7 @@ def get_stars_surface_brightness_map(
         Q=10,
         stretch=0.5,
     )
-    # mask with circle
-    lx, ly = mass_map_face.shape
-    X, Y = np.ogrid[0:lx, 0:ly]
-    mask_circle = (X - lx / 2) ** 2 + (Y - ly / 2) ** 2 > lx * ly / 4
-    image_face[mask_circle, :] = 255
+
     H_kpc_gri = np.zeros(len(luminosities))
     rgb_image_edge = np.zeros((npix, npix, len(luminosities)))
     for ilum in range(len(luminosities)):
@@ -205,7 +243,7 @@ def get_stars_surface_brightness_map(
             mass_map_edge[mass_map_edge == 0.0] = 1.0e-10
 
         try:
-            H_kpc_gri[ilum] = calculate_scaleheight_fit(mass_map_edge.T, r_img_kpc)
+            H_kpc_gri[ilum] = calculate_scaleheight_fit(mass_map_edge.T, r_img_kpc, 7.5)
         except:
             H_kpc_gri[ilum] = -1.0
         rgb_image_edge[:, :, ilum] = mass_map_edge.T
@@ -217,11 +255,6 @@ def get_stars_surface_brightness_map(
         Q=10,
         stretch=0.5,
     )
-    # mask with circle
-    lx, ly = mass_map_edge.shape
-    X, Y = np.ogrid[0:lx, 0:ly]
-    mask_circle = (X - lx / 2) ** 2 + (Y - ly / 2) ** 2 > lx * ly / 4
-    image_edge[mask_circle, :] = 255
 
     return image_face, image_edge, visualise_region, 0.0, 0.0, -1.0, H_kpc_gri
 
@@ -308,18 +341,6 @@ def get_stars_surface_density_map(
         mass_map_edge[mass_map_edge == 0.0] = mass_map_edge[mass_map_edge > 0.0].min()
     except:
         mass_map_edge[mass_map_edge == 0.0] = 1.0e-10
-
-    # mask with circle
-    lx, ly = mass_map_edge.shape
-    X, Y = np.ogrid[0:lx, 0:ly]
-    mask_circle = (X - lx / 2) ** 2 + (Y - ly / 2) ** 2 > lx * ly / 4
-    mass_map_edge[mask_circle] = np.nan
-
-    # mask with circle
-    lx, ly = mass_map_face.shape
-    X, Y = np.ogrid[0:lx, 0:ly]
-    mask_circle = (X - lx / 2) ** 2 + (Y - ly / 2) ** 2 > lx * ly / 4
-    mass_map_face[mask_circle] = np.nan
 
     return mass_map_face.T, mass_map_edge.T, visualise_region, 0.0, 0.0, totalmass
 
@@ -418,18 +439,6 @@ def get_gas_surface_density_map(
     else:
         mass_map_edge.convert_to_units(unyt.Msun / unyt.pc ** 2)
 
-    # mask with circle
-    lx, ly = mass_map_edge.shape
-    X, Y = np.ogrid[0:lx, 0:ly]
-    mask_circle = (X - lx / 2) ** 2 + (Y - ly / 2) ** 2 > lx * ly / 4
-    mass_map_edge[mask_circle] = np.nan
-
-    # mask with circle
-    lx, ly = mass_map_face.shape
-    X, Y = np.ogrid[0:lx, 0:ly]
-    mask_circle = (X - lx / 2) ** 2 + (Y - ly / 2) ** 2 > lx * ly / 4
-    mass_map_face[mask_circle] = np.nan
-
     return mass_map_face.T, mass_map_edge.T, visualise_region, 0.0, 0.0, totalmass
 
 
@@ -482,83 +491,84 @@ def plot_galaxy(
     output_path,
 ):
 
-    fig = plt.figure(figsize=(15.0, 3.5))
-    fig.subplots_adjust(left=0.01, right=0.95, top=0.85, bottom=0.12)
-    gs = gridspec.GridSpec(
-        2, nr_total_plots, wspace=0.0, hspace=0.15, height_ratios=[0.05, 1.0]
-    )
+    FLTMIN = np.nextafter(np.float32(0), np.float32(1))
+    if FLTMIN == 0.:
+        #if shared objects are compiled with e.g. fast math
+        FLTMIN = 1.e-30
 
-    # General information
-    text = "z = %.1f" % (catalogue.redshift) + "\n\n"
-    text += r"${\bf " + "VR\ halo\ id:\ \ \ %3.3i" % (halo_id) + r"}$" + "\n"
-    text += (
+    image_info =  "Image size: (%.1f x %.1f) kpc, "%(2. * r_img_kpc.value, 2. * r_img_kpc.value)
+    image_info += " resolution: (%i x %i) pixel."%(npix, npix) 
+
+
+    galaxy_info = (
+        " Coordinates (x,y,z) = "
+         + f"({catalogue.positions.xcmbp[halo_id].to('Mpc').value:.02f}, "
+         + f"{catalogue.positions.ycmbp[halo_id].to('Mpc').value:.02f}, "
+         + f"{catalogue.positions.zcmbp[halo_id].to('Mpc').value:.02f}) cMpc, "
+    )
+    galaxy_info += (
         r"M$_{\mathrm{200,crit}}$ = "
         + sci_notation(catalogue.masses.mass_200crit[halo_id].to("Msun").value)
-        + r" M$_{\odot}$"
-        + "\n"
+        + r" M$_{\odot}$, "
     )
-    text += (
+    galaxy_info += (
         r"M$_{\mathrm{*,30kpc}}$ = "
         + sci_notation(catalogue.masses.mass_star_30kpc[halo_id].to("Msun").value)
-        + r" M$_{\odot}$"
-        + "\n"
+        + r" M$_{\odot}$, "
     )
-    text += (
+    galaxy_info += (
         r"M$_{\mathrm{gas,30kpc}}$ = "
         + sci_notation(catalogue.masses.mass_gas_30kpc[halo_id].to("Msun").value)
-        + r" M$_{\odot}$"
-        + "\n"
+        + r" M$_{\odot}$, "
     )
-    text += (
+    galaxy_info += (
         r"M$_{\mathrm{HI,30kpc}}$ = "
         + sci_notation(
             catalogue.gas_hydrogen_species_masses.HI_mass_30_kpc[halo_id]
             .to("Msun")
             .value
         )
-        + r" M$_{\odot}$"
-        + "\n"
+        + r" M$_{\odot}$, "
     )
-    text += (
+    galaxy_info += (
         r"M$_{\mathrm{H2,30kpc}}$ = "
         + sci_notation(
             catalogue.gas_hydrogen_species_masses.H2_mass_30_kpc[halo_id]
             .to("Msun")
             .value
         )
-        + r" M$_{\odot}$"
-        + "\n"
+        + r" M$_{\odot}$, "
     )
     sSFR = (
         catalogue.apertures.sfr_gas_100_kpc[halo_id]
         / catalogue.apertures.mass_star_100_kpc[halo_id]
     )
     if np.isfinite(sSFR):
-        text += (
+        galaxy_info += (
             r"sSFR$_{\mathrm{100}}$ = "
             + sci_notation(sSFR.to("Gyr**(-1)").value)
             + r" Gyr$^{-1}$"
         )
 
-    ax = plt.subplot(gs[nr_total_plots])
-    ax.set_aspect("equal")
-    ax.tick_params(labelleft=False, labelbottom=False)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.text(0.05, 0.95, text, ha="left", va="top", transform=ax.transAxes, fontsize=8)
-    ax.text(
-        0.05,
-        1.20,
-        "%i Galaxy" % (index + 1),
-        ha="left",
-        va="bottom",
-        transform=ax.transAxes,
-        fontsize=14,
-    )
+    stars_faceon_filename = "galaxy_%3.3i_map_stars_faceon.png"%(index)
+    stars_edgeon_filename = "galaxy_%3.3i_map_stars_edgeon.png"%(index)
+    HI_faceon_filename    = "galaxy_%3.3i_map_HI_faceon.png"%(index) 
+    HI_edgeon_filename    = "galaxy_%3.3i_map_HI_edgeon.png"%(index) 
+    H2_faceon_filename    = "galaxy_%3.3i_map_H2_faceon.png"%(index) 
+    H2_edgeon_filename    = "galaxy_%3.3i_map_H2_edgeon.png"%(index) 
 
-    # Stars gri face-on
-    ax = plt.subplot(gs[nr_total_plots + 1])
-    ax.set_title("Stars (gri) - face")
+    plots = {}
+
+    fig_stars_faceon, ax_stars_faceon = pl.subplots(1, 1)
+    fig_stars_edgeon, ax_stars_edgeon = pl.subplots(1, 1)
+    fig_HI_faceon, ax_HI_faceon = pl.subplots(1, 1)
+    fig_HI_edgeon, ax_HI_edgeon = pl.subplots(1, 1)
+    fig_H2_faceon, ax_H2_faceon = pl.subplots(1, 1)
+    fig_H2_edgeon, ax_H2_edgeon = pl.subplots(1, 1)
+
+    # Stars
+    ax_stars_faceon.set_title("Stars (gri) - face")
+    ax_stars_edgeon.set_title("Stars (gri) - edge")
     (
         mass_map_face,
         mass_map_edge,
@@ -577,67 +587,14 @@ def plot_galaxy(
         face_on_rotation_matrix,
         edge_on_rotation_matrix,
     )
+    im = ax_stars_faceon.imshow(mass_map_face, extent=visualise_region)
+    im = ax_stars_edgeon.imshow(mass_map_edge, extent=visualise_region)
 
-    mass_map_face_plot = mass_map_face
-    mass_map_edge_plot = mass_map_edge
-    ax.tick_params(labelleft=False, labelbottom=False)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_axis_off()
-    im = ax.imshow(mass_map_face_plot, extent=visualise_region)
-    circle = plt.Circle(
-        (x, y),
-        (0.99 * r_img_kpc.value) / 1000.0,
-        color="black",
-        fill=False,
-        linewidth=2,
-    )
-    ax.add_artist(circle)
-    ax.plot(
-        [x - lbar_kpc / 2.0, x + lbar_kpc / 2.0],
-        [y + ypos_bar, y + ypos_bar],
-        color="white",
-        linewidth=2,
-        linestyle="solid",
-    )
-    ax.text(
-        x,
-        y + ypos_bar,
-        "%i kpc" % (int(lbar_kpc.value)),
-        color="white",
-        verticalalignment="bottom",
-        horizontalalignment="center",
-    )
-    # Stars gri edge-on
-    ax = plt.subplot(gs[nr_total_plots + 2])
-    ax.set_title("Stars (gri) - edge")
-    ax.tick_params(labelleft=False, labelbottom=False)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_axis_off()
-    im = ax.imshow(mass_map_edge_plot, extent=visualise_region)
-    circle = plt.Circle(
-        (x, y),
-        (0.99 * r_img_kpc.value) / 1000.0,
-        color="black",
-        fill=False,
-        linewidth=2,
-    )
-    ax.add_artist(circle)
-    ax.text(
-        0.5,
-        0.2,
-        r"H$_{r}$ = %.2f kpc" % (H_kpc_gri[1]),
-        ha="center",
-        va="top",
-        color="white",
-        transform=ax.transAxes,
-        fontsize=8,
-    )
-    # HI face-on
-    ax = plt.subplot(gs[nr_total_plots + 3])
-    ax.set_title("Gas (HI) - face")
-    (
+    # HI
+    ax_HI_faceon.set_title("Gas (HI) - face")
+    ax_HI_edgeon.set_title("Gas (HI) - edge")
+
+    (   
         mass_map_face,
         mass_map_edge,
         visualise_region,
@@ -657,63 +614,21 @@ def plot_galaxy(
     mass_map_face.convert_to_units("Msun / pc**2")
     mass_map_edge.convert_to_units("Msun / pc**2")
     mass_map_face_plot_HI = mass_map_face  # save for H2 ratio plot
-    totalmass_H2 = totalmass  # save for H2 ratio plot
     mass_map_face_plot = np.log10(mass_map_face.value)
     mass_map_edge_plot = np.log10(mass_map_edge.value)
-    ax.tick_params(labelleft=False, labelbottom=False)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_axis_off()
-    colormap = "Blues"
-    cmap_loc = plt.get_cmap(colormap)
-    ccolor = cmap_loc(0.5)
-    im = ax.imshow(
-        mass_map_face_plot, cmap=colormap, extent=visualise_region, vmin=vmin, vmax=vmax
-    )
-    circle = plt.Circle(
-        (x, y), (0.99 * r_img_kpc.value) / 1000.0, color=ccolor, fill=False, linewidth=2
-    )
-    ax.add_artist(circle)
-    # HI edge-on
-    ax = plt.subplot(gs[nr_total_plots + 4])
-    ax.set_title("Gas (HI) - edge")
-    ax.tick_params(labelleft=False, labelbottom=False)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_axis_off()
-    im = ax.imshow(
-        mass_map_edge_plot, cmap=colormap, extent=visualise_region, vmin=vmin, vmax=vmax
-    )
-    circle = plt.Circle(
-        (x, y), (0.99 * r_img_kpc.value) / 1000.0, color=ccolor, fill=False, linewidth=2
-    )
-    ax.add_artist(circle)
-    try:
-        H_kpc = calculate_scaleheight_fit(mass_map_edge.value)
-        ax.text(
-            0.5,
-            0.2,
-            r"H$_{\mathrm{HI}}$ = %.2f kpc" % (H_kpc),
-            ha="center",
-            va="top",
-            color="black",
-            transform=ax.transAxes,
-            fontsize=8,
-        )
-    except:
-        H_kpc = -1.0
 
-    # HI colorbar
-    cax = plt.subplot(gs[3:5])
-    cb = fig.colorbar(im, cax=cax, orientation="horizontal")
-    cb.set_label("log $\Sigma_{\mathrm{%s}}$ [M$_{\odot}$ pc$^{-2}$]" % ("HI"))
-    cb.ax.xaxis.set_ticks_position("top")
-    cb.ax.xaxis.set_label_position("top")
-    cb.set_ticks(np.arange(round(vmin), vmax + 0.5, 0.5))
-    # H2 face-on
-    ax = plt.subplot(gs[nr_total_plots + 5])
-    ax.set_title("Gas (H2) - face")
-    (
+    im = ax_HI_faceon.imshow(
+        mass_map_face_plot, cmap="Blues", extent=visualise_region, vmin=vmin, vmax=vmax
+    )
+    im = ax_HI_edgeon.imshow(
+        mass_map_edge_plot, cmap="Blues", extent=visualise_region, vmin=vmin, vmax=vmax
+    )
+
+    # H2
+    ax_H2_faceon.set_title("Gas (H2) - face")
+    ax_H2_edgeon.set_title("Gas (H2) - edge")
+
+    (   
         mass_map_face,
         mass_map_edge,
         visualise_region,
@@ -733,208 +648,95 @@ def plot_galaxy(
     mass_map_face.convert_to_units("Msun / pc**2")
     mass_map_edge.convert_to_units("Msun / pc**2")
     mass_map_face_plot_H2 = mass_map_face  # save for H2 ratio plot
-    mass_map_face_plot = np.log10(mass_map_face.value)
-    mass_map_edge_plot = np.log10(mass_map_edge.value)
-    ax.tick_params(labelleft=False, labelbottom=False)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_axis_off()
-    colormap = "Greens"
-    cmap_loc = plt.get_cmap(colormap)
-    ccolor = cmap_loc(0.5)
-    im = ax.imshow(
-        mass_map_face_plot, cmap=colormap, extent=visualise_region, vmin=vmin, vmax=vmax
-    )
-    circle = plt.Circle(
-        (x, y), (0.99 * r_img_kpc.value) / 1000.0, color=ccolor, fill=False, linewidth=2
-    )
-    ax.add_artist(circle)
-    # H2 edge-on
-    ax = plt.subplot(gs[nr_total_plots + 6])
-    ax.set_title("Gas (H2) - edge")
-    ax.tick_params(labelleft=False, labelbottom=False)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_axis_off()
-    im = ax.imshow(
-        mass_map_edge_plot, cmap=colormap, extent=visualise_region, vmin=vmin, vmax=vmax
-    )
-    circle = plt.Circle(
-        (x, y), (0.99 * r_img_kpc.value) / 1000.0, color=ccolor, fill=False, linewidth=2
-    )
-    ax.add_artist(circle)
-    try:
-        H_kpc = calculate_scaleheight_fit(mass_map_edge.value)
-        ax.text(
-            0.5,
-            0.2,
-            r"H$_{\mathrm{H2}}$ = %.2f kpc" % (H_kpc),
-            ha="center",
-            va="top",
-            color="black",
-            transform=ax.transAxes,
-            fontsize=8,
-        )
-    except:
-        H_kpc = -1.0
+    mass_map_face_plot = np.log10(np.maximum(mass_map_face.value, FLTMIN))
+    mass_map_edge_plot = np.log10(np.maximum(mass_map_edge.value, FLTMIN))
 
-    # H2 colorbar
-    cax = plt.subplot(gs[5:7])
-    cb = fig.colorbar(im, cax=cax, orientation="horizontal")
-    cb.set_label("log $\Sigma_{\mathrm{%s}}$ [M$_{\odot}$ pc$^{-2}$]" % ("H2"))
-    cb.ax.xaxis.set_ticks_position("top")
-    cb.ax.xaxis.set_label_position("top")
-    cb.set_ticks(np.arange(round(vmin), vmax + 0.5, 0.5))
-    # Sigma H2 / Sigma HI vs. Sigma HI+H2
-    ax = plt.subplot(gs[nr_total_plots + 7])
-    ax.set_title("HI - H2 transition")
-    ax.set_aspect(
-        (Sigma_max - Sigma_min) / (np.log10(H2_over_HI_max) - np.log10(H2_over_HI_min))
+    im = ax_H2_faceon.imshow(
+        mass_map_face_plot, cmap="Greens", extent=visualise_region, vmin=vmin, vmax=vmax
     )
-    ax.set_xlim(Sigma_min, Sigma_max)
-    ax.set_ylim(H2_over_HI_min, H2_over_HI_max)
-    ax.set_yscale("log")
-    ax.set_yticks([0.1, 1.0, 10.0, 100.0])
-    ax.set_yticklabels(["0.1", "1", "10", "100"])
-    ax.yaxis.set_label_position("right")
-    ax.yaxis.tick_right()
-    ax.set_xlabel(
-        r"$\Sigma_{\mathrm{HI}}$ + $\Sigma_{\mathrm{H2}}$ [M$_{\odot}$ pc$^{-2}$]"
-    )
-    ax.set_ylabel(r"$\Sigma_{\mathrm{H2}}$ / $\Sigma_{\mathrm{HI}}$")
-    # Schruba+2011 data
-    if totalmass_H2.to("Msun").value > 1.0e7:
-        markers = ["o", "s", "D"]
-        for irad in range(len(radialbinsizes)):
-            radialbin_kpc = radialbinsizes[irad]
-            # datapoint position
-            _, Sigma_HIH2_sub = get_radial_profile(
-                mass_map_face_plot_HI + mass_map_face_plot_H2,
-                radialbin_kpc,
-                pixsize_kpc,
-                r_img_kpc,
-            )
-            _, Sigma_HI_sub = get_radial_profile(
-                mass_map_face_plot_HI, radialbin_kpc, pixsize_kpc, r_img_kpc
-            )
-            _, Sigma_H2_sub = get_radial_profile(
-                mass_map_face_plot_H2, radialbin_kpc, pixsize_kpc, r_img_kpc
-            )
-            # datapoint color (metallicity)
-            (
-                mass_map_face_plot_H,
-                _,
-                _,
-                _,
-                _,
-                totalmass_H,
-            ) = get_gas_surface_density_map(
-                catalogue,
-                halo_id,
-                "hydrogen",
-                data,
-                size,
-                npix,
-                face_on_rotation_matrix,
-                edge_on_rotation_matrix,
-            )
-            (
-                mass_map_face_plot_O_diffuse,
-                _,
-                _,
-                _,
-                _,
-                totalmass_O_diffuse,
-            ) = get_gas_surface_density_map(
-                catalogue,
-                halo_id,
-                "diffuseoxygen",
-                data,
-                size,
-                npix,
-                face_on_rotation_matrix,
-                edge_on_rotation_matrix,
-            )
-            (
-                mass_map_face_plot_star,
-                _,
-                _,
-                _,
-                _,
-                totalmass_star,
-            ) = get_stars_surface_density_map(
-                catalogue,
-                halo_id,
-                "stars",
-                data,
-                size,
-                npix,
-                face_on_rotation_matrix,
-                edge_on_rotation_matrix,
-            )
-
-            _, Sigma_H_sub = get_radial_profile(
-                mass_map_face_plot_H, radialbin_kpc, pixsize_kpc, r_img_kpc
-            )
-            _, Sigma_O_diffuse_sub = get_radial_profile(
-                mass_map_face_plot_O_diffuse, radialbin_kpc, pixsize_kpc, r_img_kpc
-            )
-            _, Sigma_star = get_radial_profile(
-                mass_map_face_plot_star, radialbin_kpc, pixsize_kpc, r_img_kpc
-            )
-            sc = ax.scatter(
-                Sigma_HIH2_sub[Sigma_HI_sub > 0.0],
-                Sigma_H2_sub[Sigma_HI_sub > 0.0] / Sigma_HI_sub[Sigma_HI_sub > 0.0],
-                c=12.0
-                + np.log10(
-                    Sigma_O_diffuse_sub[Sigma_HI_sub > 0.0]
-                    / Sigma_H_sub[Sigma_HI_sub > 0.0]
-                    / 16.0
-                ),
-                vmin=twelve_plus_logOH_min,
-                vmax=twelve_plus_logOH_max,
-                cmap=cmRdBu,
-                edgecolors="black",
-                label="Azim.avg. %.2f kpc" % (radialbin_kpc),
-                marker=markers[irad],
-            )
-    ax.legend(bbox_to_anchor=(-0.1, -0.1), ncol=3, loc="upper right", fontsize=8)
-
-    # Metallicity colorbar
-    if totalmass_H2.to("Msun").value > 1.0e7:
-        cax = plt.subplot(gs[7])
-        cb = fig.colorbar(sc, cax=cax, orientation="horizontal")
-        cb.set_label(r"12 + log$_{\mathrm{10}}$(O/H)$_{\mathrm{diffuse}}$")
-        cb.ax.xaxis.set_ticks_position("top")
-        cb.ax.xaxis.set_label_position("top")
-        cb.set_ticks(
-            [twelve_plus_logOH_min, twelve_plus_logOH_solar, twelve_plus_logOH_max]
-        )
-
-    Zdiffuse = catalogue.cold_dense_gas_properties.cold_dense_diffuse_metal_mass_100_kpc[
-        halo_id
-    ]
-    ColdGas = catalogue.cold_dense_gas_properties.cold_dense_gas_mass_100_kpc[halo_id]
-    twelve_plus_logOH = -99.0
-    if ColdGas > 0.0:
-        twelve_plus_logOH = (
-            np.log10(Zdiffuse / (Zsun * ColdGas)) + twelve_plus_log_OH_solar
-        )
-
-    ax.text(
-        0.95,
-        0.05,
-        "12 + log$_{\mathrm{10}}$(O/H) = %.2f" % (twelve_plus_logOH),
-        va="bottom",
-        ha="right",
-        transform=ax.transAxes,
-        fontsize=8,
+    im = ax_H2_edgeon.imshow(
+        mass_map_edge_plot, cmap="Greens", extent=visualise_region, vmin=vmin, vmax=vmax
     )
 
-    outputname = f"surface_overview_halo{index:03d}.png"
-    fig.savefig(f"{output_path}/{outputname}", dpi=150)
-    plt.close()
+    for ax in [ax_stars_faceon, ax_stars_edgeon, 
+               ax_HI_faceon, ax_HI_edgeon, 
+               ax_H2_faceon, ax_H2_edgeon]:
+        ax.set_aspect("equal")
+        ax.tick_params(labelleft=False, labelbottom=False)
+        ax.set_xticks([])
+        ax.set_yticks([])
 
-    return {
-        outputname: {"caption": "Surface density plots", "title": "Surface densities"}
+    fig_stars_faceon.savefig(f"{output_path}/{stars_faceon_filename}", dpi = 300)
+    fig_stars_edgeon.savefig(f"{output_path}/{stars_edgeon_filename}", dpi = 300)
+    fig_HI_faceon.savefig(f"{output_path}/{HI_faceon_filename}", dpi = 300)
+    fig_HI_edgeon.savefig(f"{output_path}/{HI_edgeon_filename}", dpi = 300)
+    fig_H2_faceon.savefig(f"{output_path}/{H2_faceon_filename}", dpi = 300)
+    fig_H2_edgeon.savefig(f"{output_path}/{H2_edgeon_filename}", dpi = 300)
+
+    pl.close(fig_stars_faceon)
+    pl.close(fig_stars_edgeon)
+    pl.close(fig_HI_faceon)
+    pl.close(fig_HI_edgeon)
+    pl.close(fig_H2_faceon)
+    pl.close(fig_H2_edgeon)
+
+    plots["Visualisation"] = {
+        stars_faceon_filename: {
+            "title": "Stars (face-on)",
+            "caption": (
+                            "Unattenuated gri image in face-on projection. "
+                            + image_info
+                            + galaxy_info
+            ),
+        },
+        stars_edgeon_filename: {
+            "title": "Stars (edge-on)",
+            "caption": (
+                            "Unattenuated gri image in edge-on projection. "
+                            + image_info
+                            + galaxy_info
+            ),
+        },
+        HI_faceon_filename: {
+            "title": "HI surface density (face-on)",
+            "caption": (
+                            r"HI surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$,"
+                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                             "in face-on projection."
+                            + image_info
+                            + galaxy_info
+            ),
+        },
+        HI_edgeon_filename: {
+            "title": "HI surface density (edge-on)",
+            "caption": (
+                            r"HI surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
+                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                             "in edge-on projection."
+                            + image_info
+                            + galaxy_info
+            ),
+        },
+        H2_faceon_filename: {
+            "title": "H2 surface density (face-on)",
+            "caption": (
+                            r"H2 surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
+                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                             "in face-on projection."
+                            + image_info
+                            + galaxy_info
+            ),
+        },
+        H2_edgeon_filename: {
+            "title": "H2 surface density (edge-on)",
+            "caption": (
+                            r"H2 surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
+                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                             "in edge-on projection."
+                            + image_info
+                            + galaxy_info
+            ),
+        },
     }
+
+    return plots

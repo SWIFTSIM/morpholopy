@@ -30,6 +30,8 @@ direct_read = {
     "plotting_upper_mass_limit_in_Msun": (None, np.float32, unyt.Msun),
     "plotting_number_of_galaxies": (None, np.uint32, None),
     "plotting_random_seed": (42, np.uint32, None),
+    "scaleheight_binsize_kpc": (0.02, np.float32, unyt.kpc),
+    "scaleheight_lower_gasmass_limit_in_number_of_particles": (10., np.float32, None),
     "orientation_method": ("stars_0xR0.5_R0.5_0sigma", str, None),
 }
 

@@ -204,6 +204,7 @@ if __name__ == "__main__":
 
     from morpholopy.HI_size import plot_HI_size_mass
     from morpholopy.morphology import plot_morphology
+    from morpholopy.morphology import plot_scaleheights
     from morpholopy.KS import plot_KS_relations
 
     from morpholopy.logging import MainLog
@@ -343,6 +344,8 @@ if __name__ == "__main__":
                     snapshot_filename,
                     args.output,
                     observational_data_path,
+                    config.scaleheight_binsize_kpc,
+                    config.scaleheight_lower_gasmass_limit_in_number_of_particles,
                     config.orientation_method,
                     make_plots,
                     main_log,
@@ -437,6 +440,11 @@ if __name__ == "__main__":
     )
     all_images.update(
         plot_morphology(
+            args.output, observational_data_path, run_names, all_galaxies_list
+        )
+    )
+    all_images.update(
+        plot_scaleheights(
             args.output, observational_data_path, run_names, all_galaxies_list
         )
     )
