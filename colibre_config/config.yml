@@ -19,4 +19,4 @@ scaleheight_lower_gasmass_limit_in_number_of_particles: 10
 
 orientation_method: stars_0xR0.5_R0.5_0sigma
 
-make_individual_KS_plots: 0: 0
+make_individual_KS_plots: 0
