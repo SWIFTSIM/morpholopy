@@ -384,7 +384,7 @@ class AllGalaxyData:
             yaml.safe_dump(datadict, handle)
 
 
-def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
+def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict], Union[None, Dict]]:
     """
     Main galaxy analysis function.
     Called exactly once for every galaxy in the simulation. Executed by
