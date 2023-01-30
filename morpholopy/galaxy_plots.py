@@ -499,11 +499,14 @@ def plot_galaxy(
     image_info =  "Image size: (%.1f x %.1f) kpc, "%(2. * r_img_kpc.value, 2. * r_img_kpc.value)
     image_info += " resolution: (%i x %i) pixel."%(npix, npix) 
 
-    galaxy_info_title = (
-        f"Galaxy {halo_id:08d} " 
-         + f"[ {catalogue.positions.xcmbp[halo_id].to('Mpc').value:.02f}, "
+    galaxy_coords_text = (
+           f"[ {catalogue.positions.xcmbp[halo_id].to('Mpc').value:.02f}, "
          + f"{catalogue.positions.ycmbp[halo_id].to('Mpc').value:.02f}, "
          + f"{catalogue.positions.zcmbp[halo_id].to('Mpc').value:.02f} ] cMpc"
+    )
+
+    galaxy_info_title = (
+        f"Galaxy {halo_id:08d} " + galaxy_coords_text
     )
 
     galaxy_info_short = (
@@ -516,10 +519,7 @@ def plot_galaxy(
     )
 
     galaxy_info = (
-        " Coordinates (x,y,z) = "
-         + f"({catalogue.positions.xcmbp[halo_id].to('Mpc').value:.02f}, "
-         + f"{catalogue.positions.ycmbp[halo_id].to('Mpc').value:.02f}, "
-         + f"{catalogue.positions.zcmbp[halo_id].to('Mpc').value:.02f}) cMpc, "
+        " Coordinates (x,y,z) = " + galaxy_coords_text + ", "
     )
     galaxy_info += (
         r"M$_{\mathrm{200,crit}}$ = "

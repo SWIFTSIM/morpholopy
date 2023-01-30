@@ -398,6 +398,9 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
      - the galaxy data (will be put in AllGalaxyData[index])
      - a dictionary of images that will be appended to the images dictionary,
        or None if there are no individual images for this galaxy (most common case)
+     - a separate dictionary only containing the face-on and edge gri images for the
+       stellar disks gallery or None if there are no individual images for this 
+       galaxy (most common case)
     """
 
     # unpack arguments

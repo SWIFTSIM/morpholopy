@@ -298,7 +298,7 @@ if __name__ == "__main__":
         )
 
         if not args.lazy:
-            all_gallery_images = {"YYY - Gallery": {}}
+            all_gallery_images = {}
             # compute the galaxy properties
             # start by getting the catalogue and snapshot file name
             halo_catalogue_filename = f"{args.input[0]}/{args.catalogues[0]}"
@@ -407,14 +407,14 @@ if __name__ == "__main__":
                     main_log.debug(f"Adding figures for galaxy {index}")
                     all_images.update(images)
                 if gallery_images is not None:
-                    all_gallery_images["YYY - Gallery"].update(gallery_images)
+                    all_gallery_images.update(gallery_images)
             # properly terminate the parallel pool
             # while not strictly necessary, not doing this sometimes spawns
             # confusing warning messages
             pool.close()
             pool.join()
 
-            all_images["YYY - Gallery"] = all_gallery_images["YYY - Gallery"]
+            all_images["YYY - Gallery"] = all_gallery_images
 
             main_log.debug("Creating metadata output file")
             # save plot data using the given metadata name
