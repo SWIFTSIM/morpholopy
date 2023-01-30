@@ -298,6 +298,7 @@ if __name__ == "__main__":
         )
 
         if not args.lazy:
+            all_gallery_images = {}
             # compute the galaxy properties
             # start by getting the catalogue and snapshot file name
             halo_catalogue_filename = f"{args.input[0]}/{args.catalogues[0]}"
@@ -346,6 +347,7 @@ if __name__ == "__main__":
                     observational_data_path,
                     config.scaleheight_binsize_kpc,
                     config.scaleheight_lower_gasmass_limit_in_number_of_particles,
+                    config.make_individual_KS_plots,
                     config.orientation_method,
                     make_plots,
                     main_log,
@@ -391,7 +393,7 @@ if __name__ == "__main__":
             # fixed
             galaxy_count = 0
             # process all galaxies using the parallel pool
-            for index, galaxy_data, images in pool.imap_unordered(
+            for index, galaxy_data, images, gallery_images in pool.imap_unordered(
                 process_galaxy, arglist
             ):
                 galaxy_count += 1
@@ -404,11 +406,15 @@ if __name__ == "__main__":
                 if images is not None:
                     main_log.debug(f"Adding figures for galaxy {index}")
                     all_images.update(images)
+                if gallery_images is not None:
+                    all_gallery_images.update(gallery_images)
             # properly terminate the parallel pool
             # while not strictly necessary, not doing this sometimes spawns
             # confusing warning messages
             pool.close()
             pool.join()
+
+            all_images["YYY - Gallery"] = all_gallery_images
 
             main_log.debug("Creating metadata output file")
             # save plot data using the given metadata name

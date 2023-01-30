@@ -384,7 +384,7 @@ class AllGalaxyData:
             yaml.safe_dump(datadict, handle)
 
 
-def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
+def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict], Union[None, Dict]]:
     """
     Main galaxy analysis function.
     Called exactly once for every galaxy in the simulation. Executed by
@@ -398,6 +398,9 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
      - the galaxy data (will be put in AllGalaxyData[index])
      - a dictionary of images that will be appended to the images dictionary,
        or None if there are no individual images for this galaxy (most common case)
+     - a separate dictionary only containing the face-on and edge gri images for the
+       stellar disks gallery or None if there are no individual images for this 
+       galaxy (most common case)
     """
 
     # unpack arguments
@@ -413,6 +416,7 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
         observational_data_path,
         scaleheight_binsize_kpc,
         scaleheight_lower_gasmass_limit_in_number_of_particles,
+        make_individual_KS_plots,
         orientation_type,
         make_plots,
         main_log,
@@ -794,7 +798,6 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
     if make_plots:
         # images
         images = {f"ZZZ - Galaxy {galaxy_index:08d}": {}}
-
         galaxy_images = plot_galaxy(
                 catalogue,
                 galaxy_index,
@@ -807,22 +810,25 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict]]:
         images[f"ZZZ - Galaxy {galaxy_index:08d}"].update(
             galaxy_images["Visualisation"]
         )
+        gallery_images = galaxy_images["Gallery"]
     
-        # individual KS plots
-        galaxy_data.compute_medians()
-        KS_images = plot_KS_relations(
-            output_path,
-            observational_data_path,
-            [f"Galaxy {galaxy_index}"],
-            [galaxy_data],
-            prefix=f"galaxy_{index:03d}_",
-            always_plot_scatter=True,
-            plot_integrated_quantities=False,
-        )
-        images[f"ZZZ - Galaxy {galaxy_index:08d}"].update(
-            KS_images["Combined surface densities"]
-        )
+        if make_individual_KS_plots:
+            # individual KS plots
+            galaxy_data.compute_medians()
+            KS_images = plot_KS_relations(
+                output_path,
+                observational_data_path,
+                [f"Galaxy {galaxy_index}"],
+                [galaxy_data],
+                prefix=f"galaxy_{index:03d}_",
+                always_plot_scatter=True,
+                plot_integrated_quantities=False,
+            )
+            images[f"ZZZ - Galaxy {galaxy_index:08d}"].update(
+                KS_images["Combined surface densities"]
+            )
     else:
         images = None
+        gallery_images = None
 
-    return index, galaxy_data, images
+    return index, galaxy_data, images, gallery_images
