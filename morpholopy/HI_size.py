@@ -101,7 +101,7 @@ def calculate_HI_size(
     image.convert_to_units("Msun/pc**2")
 
     # Compute the HI mass as the integrated surface density of the image
-    HImass = image.sum() * (R / resolution) ** 2
+    HImass = image.sum() * (2.0 * R / resolution) ** 2
 
     if HImass == 0.0:
         galaxy_log.debug("Neutral gas mass is zero, not computing HI size.")
