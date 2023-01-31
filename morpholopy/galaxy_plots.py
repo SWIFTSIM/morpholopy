@@ -75,23 +75,29 @@ userblue = cmap(0.7)
 def exponential(x, Sigma0, H, offset):
     return Sigma0 * np.exp(-np.abs(x + offset) / H)
 
+
 def calculate_scaleheight_pointmasses(zcoords, weights, zrange, resolution):
 
-    S_1D, bin_edges = np.histogram(zcoords, bins = resolution, range = (-zrange, zrange),
-                        weights = weights, density = False)
+    S_1D, bin_edges = np.histogram(
+        zcoords,
+        bins=resolution,
+        range=(-zrange, zrange),
+        weights=weights,
+        density=False,
+    )
 
-    z_1D = (bin_edges[1:] + bin_edges[:-1])/2.
-    p0 = (hist.max(), 1., 0.)
+    z_1D = (bin_edges[1:] + bin_edges[:-1]) / 2.0
+    p0 = (hist.max(), 1.0, 0.0)
 
     try:
         popt, pcov = curve_fit(
-                exponential, z_1D[np.isfinite(S_1D)], S_1D[np.isfinite(S_1D)]
+            exponential, z_1D[np.isfinite(S_1D)], S_1D[np.isfinite(S_1D)]
         )
     except:
         return np.nan
 
     return popt[1]
-        
+
 
 def calculate_scaleheight_fit(mass_map, r_img_kpc, r_abs_max_kpc):
     xx = np.linspace(
@@ -101,12 +107,14 @@ def calculate_scaleheight_fit(mass_map, r_img_kpc, r_abs_max_kpc):
     z_1D = np.ravel(z[:, (np.abs(xx) < r_abs_max_kpc)])
     S_1D = np.ravel(mass_map[:, (np.abs(xx) < r_abs_max_kpc)])
 
-    p0 = (mass_map.max(), 1., 0.)
+    p0 = (mass_map.max(), 1.0, 0.0)
 
     try:
         popt, pcov = curve_fit(
-                exponential, z_1D[np.isfinite(S_1D)], S_1D[np.isfinite(S_1D)],
-                bounds = ( (0., 1.e-5, -5.), (np.inf, 100., +5.) )
+            exponential,
+            z_1D[np.isfinite(S_1D)],
+            S_1D[np.isfinite(S_1D)],
+            bounds=((0.0, 1.0e-5, -5.0), (np.inf, 100.0, +5.0)),
         )
     except:
         return np.nan
@@ -134,6 +142,7 @@ def sci_notation(num, decimal_digits=1, precision=None, exponent=None):
             precision = decimal_digits
 
         return r"${0:.{2}f}\times10^{{{1:d}}}$".format(coeff, exponent, precision)
+
 
 def get_stars_surface_brightness_map(
     catalogue,
@@ -492,22 +501,23 @@ def plot_galaxy(
 ):
 
     FLTMIN = np.nextafter(np.float32(0), np.float32(1))
-    if FLTMIN == 0.:
-        #if shared objects are compiled with e.g. fast math
-        FLTMIN = 1.e-30
+    if FLTMIN == 0.0:
+        # if shared objects are compiled with e.g. fast math
+        FLTMIN = 1.0e-30
 
-    image_info =  "Image size: (%.1f x %.1f) kpc, "%(2. * r_img_kpc.value, 2. * r_img_kpc.value)
-    image_info += " resolution: (%i x %i) pixel."%(npix, npix) 
+    image_info = "Image size: (%.1f x %.1f) kpc, " % (
+        2.0 * r_img_kpc.value,
+        2.0 * r_img_kpc.value,
+    )
+    image_info += " resolution: (%i x %i) pixel." % (npix, npix)
 
     galaxy_coords_text = (
-           f"[ {catalogue.positions.xcmbp[halo_id].to('Mpc').value:.02f}, "
-         + f"{catalogue.positions.ycmbp[halo_id].to('Mpc').value:.02f}, "
-         + f"{catalogue.positions.zcmbp[halo_id].to('Mpc').value:.02f} ] cMpc"
+        f"[ {catalogue.positions.xcmbp[halo_id].to('Mpc').value:.02f}, "
+        + f"{catalogue.positions.ycmbp[halo_id].to('Mpc').value:.02f}, "
+        + f"{catalogue.positions.zcmbp[halo_id].to('Mpc').value:.02f} ] cMpc"
     )
 
-    galaxy_info_title = (
-        f"Galaxy {halo_id:08d} " + galaxy_coords_text
-    )
+    galaxy_info_title = f"Galaxy {halo_id:08d} " + galaxy_coords_text
 
     galaxy_info_short = (
         r"M$_{\mathrm{200,crit}}$ = "
@@ -518,9 +528,7 @@ def plot_galaxy(
         + r" M$_{\odot}$, "
     )
 
-    galaxy_info = (
-        " Coordinates (x,y,z) = " + galaxy_coords_text + ", "
-    )
+    galaxy_info = " Coordinates (x,y,z) = " + galaxy_coords_text + ", "
     galaxy_info += (
         r"M$_{\mathrm{200,crit}}$ = "
         + sci_notation(catalogue.masses.mass_200crit[halo_id].to("Msun").value)
@@ -565,12 +573,12 @@ def plot_galaxy(
             + r" Gyr$^{-1}$"
         )
 
-    stars_faceon_filename = "galaxy_%3.3i_map_stars_faceon.png"%(index)
-    stars_edgeon_filename = "galaxy_%3.3i_map_stars_edgeon.png"%(index)
-    HI_faceon_filename    = "galaxy_%3.3i_map_HI_faceon.png"%(index) 
-    HI_edgeon_filename    = "galaxy_%3.3i_map_HI_edgeon.png"%(index) 
-    H2_faceon_filename    = "galaxy_%3.3i_map_H2_faceon.png"%(index) 
-    H2_edgeon_filename    = "galaxy_%3.3i_map_H2_edgeon.png"%(index) 
+    stars_faceon_filename = "galaxy_%3.3i_map_stars_faceon.png" % (index)
+    stars_edgeon_filename = "galaxy_%3.3i_map_stars_edgeon.png" % (index)
+    HI_faceon_filename = "galaxy_%3.3i_map_HI_faceon.png" % (index)
+    HI_edgeon_filename = "galaxy_%3.3i_map_HI_edgeon.png" % (index)
+    H2_faceon_filename = "galaxy_%3.3i_map_H2_faceon.png" % (index)
+    H2_edgeon_filename = "galaxy_%3.3i_map_H2_edgeon.png" % (index)
 
     plots = {}
 
@@ -609,7 +617,7 @@ def plot_galaxy(
     ax_HI_faceon.set_title("Gas (HI) - face")
     ax_HI_edgeon.set_title("Gas (HI) - edge")
 
-    (   
+    (
         mass_map_face,
         mass_map_edge,
         visualise_region,
@@ -643,7 +651,7 @@ def plot_galaxy(
     ax_H2_faceon.set_title("Gas (H2) - face")
     ax_H2_edgeon.set_title("Gas (H2) - edge")
 
-    (   
+    (
         mass_map_face,
         mass_map_edge,
         visualise_region,
@@ -673,20 +681,25 @@ def plot_galaxy(
         mass_map_edge_plot, cmap="Greens", extent=visualise_region, vmin=vmin, vmax=vmax
     )
 
-    for ax in [ax_stars_faceon, ax_stars_edgeon, 
-               ax_HI_faceon, ax_HI_edgeon, 
-               ax_H2_faceon, ax_H2_edgeon]:
+    for ax in [
+        ax_stars_faceon,
+        ax_stars_edgeon,
+        ax_HI_faceon,
+        ax_HI_edgeon,
+        ax_H2_faceon,
+        ax_H2_edgeon,
+    ]:
         ax.set_aspect("equal")
         ax.tick_params(labelleft=False, labelbottom=False)
         ax.set_xticks([])
         ax.set_yticks([])
 
-    fig_stars_faceon.savefig(f"{output_path}/{stars_faceon_filename}", dpi = 300)
-    fig_stars_edgeon.savefig(f"{output_path}/{stars_edgeon_filename}", dpi = 300)
-    fig_HI_faceon.savefig(f"{output_path}/{HI_faceon_filename}", dpi = 300)
-    fig_HI_edgeon.savefig(f"{output_path}/{HI_edgeon_filename}", dpi = 300)
-    fig_H2_faceon.savefig(f"{output_path}/{H2_faceon_filename}", dpi = 300)
-    fig_H2_edgeon.savefig(f"{output_path}/{H2_edgeon_filename}", dpi = 300)
+    fig_stars_faceon.savefig(f"{output_path}/{stars_faceon_filename}", dpi=300)
+    fig_stars_edgeon.savefig(f"{output_path}/{stars_edgeon_filename}", dpi=300)
+    fig_HI_faceon.savefig(f"{output_path}/{HI_faceon_filename}", dpi=300)
+    fig_HI_edgeon.savefig(f"{output_path}/{HI_edgeon_filename}", dpi=300)
+    fig_H2_faceon.savefig(f"{output_path}/{H2_faceon_filename}", dpi=300)
+    fig_H2_edgeon.savefig(f"{output_path}/{H2_edgeon_filename}", dpi=300)
 
     pl.close(fig_stars_faceon)
     pl.close(fig_stars_edgeon)
@@ -699,15 +712,13 @@ def plot_galaxy(
         stars_faceon_filename: {
             "title": galaxy_info_title,
             "caption": (
-                            "Unattenuated gri image in face-on projection. "
-                            + galaxy_info_short
+                "Unattenuated gri image in face-on projection. " + galaxy_info_short
             ),
         },
         stars_edgeon_filename: {
             "title": galaxy_info_title,
             "caption": (
-                            "Unattenuated gri image in edge-on projection. "
-                            + galaxy_info_short
+                "Unattenuated gri image in edge-on projection. " + galaxy_info_short
             ),
         },
     }
@@ -716,57 +727,49 @@ def plot_galaxy(
         stars_faceon_filename: {
             "title": "Stars (face-on)",
             "caption": (
-                            "Unattenuated gri image in face-on projection. "
-                            + image_info
-                            + galaxy_info
+                "Unattenuated gri image in face-on projection. "
+                + image_info
+                + galaxy_info
             ),
         },
         stars_edgeon_filename: {
             "title": "Stars (edge-on)",
             "caption": (
-                            "Unattenuated gri image in edge-on projection. "
-                            + image_info
-                            + galaxy_info
+                "Unattenuated gri image in edge-on projection. "
+                + image_info
+                + galaxy_info
             ),
         },
         HI_faceon_filename: {
             "title": "HI surface density (face-on)",
             "caption": (
-                            r"HI surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$,"
-                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
-                             "in face-on projection."
-                            + image_info
-                            + galaxy_info
+                r"HI surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$,"
+                f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                "in face-on projection." + image_info + galaxy_info
             ),
         },
         HI_edgeon_filename: {
             "title": "HI surface density (edge-on)",
             "caption": (
-                            r"HI surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
-                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
-                             "in edge-on projection."
-                            + image_info
-                            + galaxy_info
+                r"HI surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
+                f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                "in edge-on projection." + image_info + galaxy_info
             ),
         },
         H2_faceon_filename: {
             "title": "H2 surface density (face-on)",
             "caption": (
-                            r"H2 surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
-                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
-                             "in face-on projection."
-                            + image_info
-                            + galaxy_info
+                r"H2 surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
+                f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                "in face-on projection." + image_info + galaxy_info
             ),
         },
         H2_edgeon_filename: {
             "title": "H2 surface density (edge-on)",
             "caption": (
-                            r"H2 surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
-                            f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
-                             "in edge-on projection."
-                            + image_info
-                            + galaxy_info
+                r"H2 surface density in units of log$_{\mathrm{10}}$ M$_{\odot} \,\mathrm{pc}^{-2}$, "
+                f" colormap range: [ {vmin:.01f}, {vmax:.01f} ], "
+                "in edge-on projection." + image_info + galaxy_info
             ),
         },
     }
