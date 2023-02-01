@@ -384,7 +384,9 @@ class AllGalaxyData:
             yaml.safe_dump(datadict, handle)
 
 
-def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict], Union[None, Dict]]:
+def process_galaxy(
+    args
+) -> Tuple[int, NDArray[data_fields], Union[None, Dict], Union[None, Dict]]:
     """
     Main galaxy analysis function.
     Called exactly once for every galaxy in the simulation. Executed by
@@ -508,19 +510,19 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict], 
 
     # Lowest sSFR below which the galaxy is considered passive
     marginal_ssfr = unyt.unyt_quantity(1e-11, units=1 / unyt.year)
-    stellar_mass  = catalogue.apertures.mass_star_50_kpc[galaxy_index].to("Msun")
+    stellar_mass = catalogue.apertures.mass_star_50_kpc[galaxy_index].to("Msun")
     star_formation_rate = catalogue.apertures.sfr_gas_50_kpc[galaxy_index]
 
-    if stellar_mass == unyt.unyt_quantity(0., units= unyt.msun):
-        ssfr =  unyt.unyt_quantity(0., units= 1 / unyt.year)
+    if stellar_mass == unyt.unyt_quantity(0.0, units=unyt.msun):
+        ssfr = unyt.unyt_quantity(0.0, units=1 / unyt.year)
     else:
         ssfr = star_formation_rate / stellar_mass
         ssfr.convert_to_units("1/yr")
 
     # Mask for the active objects
     is_active = unyt.unyt_array(
-          (ssfr > (1.01 * marginal_ssfr).to(ssfr.units)).astype(np.int_),
-          units="dimensionless",
+        (ssfr > (1.01 * marginal_ssfr).to(ssfr.units)).astype(np.int_),
+        units="dimensionless",
     )
 
     galaxy_data["is_active"] = is_active
@@ -788,30 +790,38 @@ def process_galaxy(args) -> Tuple[int, NDArray[data_fields], Union[None, Dict], 
     )
 
     # - Scaleheight plots
-    galaxy_data[["HI_scaleheight", "H2_scaleheight", "stars_scaleheight"]] = get_scaleheight(
-            galaxy_log, data, Rhalf, edge_on_rmatrix, gas_mask, stars_mask, index, scaleheight_binsize_kpc,
-            scaleheight_lower_gasmass_limit_in_number_of_particles
+    galaxy_data[
+        ["HI_scaleheight", "H2_scaleheight", "stars_scaleheight"]
+    ] = get_scaleheight(
+        galaxy_log,
+        data,
+        Rhalf,
+        edge_on_rmatrix,
+        gas_mask,
+        stars_mask,
+        index,
+        scaleheight_binsize_kpc,
+        scaleheight_lower_gasmass_limit_in_number_of_particles,
     )
-    
 
     # if requested, create invidiual plots for this galaxy
     if make_plots:
         # images
         images = {f"ZZZ - Galaxy {galaxy_index:08d}": {}}
         galaxy_images = plot_galaxy(
-                catalogue,
-                galaxy_index,
-                index,
-                data,
-                face_on_rmatrix,
-                edge_on_rmatrix,
-                output_path,
-            )
+            catalogue,
+            galaxy_index,
+            index,
+            data,
+            face_on_rmatrix,
+            edge_on_rmatrix,
+            output_path,
+        )
         images[f"ZZZ - Galaxy {galaxy_index:08d}"].update(
             galaxy_images["Visualisation"]
         )
         gallery_images = galaxy_images["Gallery"]
-    
+
         if make_individual_KS_plots:
             # individual KS plots
             galaxy_data.compute_medians()
