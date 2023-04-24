@@ -427,19 +427,15 @@ def plot_KS_relations(
         fig_at.colorbar(cs_at, label=f"{Mstar.name} [${Mstar.units.latex_repr}$]")
         fig_mol.colorbar(cs_mol, label=f"{Mstar.name} [${Mstar.units.latex_repr}$]")
 
-        for dataname, ax in [
-            ("IntegratedNeutralKSRelation", ax_neut),
-            ("IntegratedAtomicKSRelation", ax_at),
-            ("IntegratedMolecularKSRelation", ax_mol),
-        ]:
-            observational_data = load_observations(
-                sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
-            )
-            with unyt.matplotlib_support:
-                for obs_data in observational_data:
-                    obs_data.plot_on_axes(ax)
+        for dataname, ax in zip(
+            [
+                "IntegratedNeutralKSRelation",
+                "IntegratedAtomicKSRelation",
+                "IntegratedMolecularKSRelation",
+            ],
+            [ax_neut, ax_at, ax_mol],
+        ):
 
-        for ax in [ax_neut, ax_at, ax_mol]:
             sim_lines = []
             sim_labels = []
             for i, name in enumerate(name_list):
@@ -448,6 +444,15 @@ def plot_KS_relations(
                     ax.plot([], [], marker=marker, color="k", linestyle="None")[0]
                 )
                 sim_labels.append(name)
+
+            if dataname is not None:
+                observational_data = load_observations(
+                    sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
+                )
+                with unyt.matplotlib_support:
+                    for obs_data in observational_data:
+                        obs_data.plot_on_axes(ax)
+
             ax.grid(True)
             ax.set_xscale("log")
             ax.set_yscale("log")
@@ -536,28 +541,34 @@ def plot_KS_relations(
                 marker=marker,
             )
 
-    for dataname, ax in [
-        ("AzimuthallyAveragedNeutralKSRelation", ax_neut),
-        ("AzimuthallyAveragedMolecularKSRelation", ax_mol),
-    ]:
-        observational_data = load_observations(
-            sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
-        )
-        with unyt.matplotlib_support:
-            for obs_data in observational_data:
-                obs_data.plot_on_axes(ax)
+    for dataname, ax in zip(
+        [
+            "AzimuthallyAveragedNeutralKSRelation",
+            None,
+            "AzimuthallyAveragedMolecularKSRelation",
+        ],
+        [ax_neut, ax_at, ax_mol],
+    ):
 
-    for ax in [ax_neut, ax_at, ax_mol]:
         sim_lines = []
         sim_labels = []
-        for i, (name, _) in enumerate(zip(name_list, all_galaxies_list)):
-            sim_lines.append(ax.plot([], [], "-", color=f"C{i}")[0])
+        for name in name_list:
+            sim_lines.append(ax.plot([], [], "-")[0])
             sim_labels.append(name)
         for _, Zlabel, linestyle, marker in metallicities:
             sim_lines.append(
                 ax.plot([], [], linestyle=linestyle, marker=marker, color="k")[0]
             )
             sim_labels.append(Zlabel)
+
+        if dataname is not None:
+            observational_data = load_observations(
+                sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
+            )
+            with unyt.matplotlib_support:
+                for obs_data in observational_data:
+                    obs_data.plot_on_axes(ax)
+
         ax.grid(True)
         ax.set_xlim(1.0e-1, 1.0e4)
         ax.set_ylim(1.0e-6, 1.0e1)
@@ -658,28 +669,34 @@ def plot_KS_relations(
                 marker=marker,
             )
 
-    for dataname, ax in [
-        ("SpatiallyResolvedNeutralKSRelation", ax_neut),
-        ("SpatiallyResolvedMolecularKSRelation", ax_mol),
-    ]:
-        observational_data = load_observations(
-            sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
-        )
-        with unyt.matplotlib_support:
-            for obs_data in observational_data:
-                obs_data.plot_on_axes(ax)
+    for dataname, ax in zip(
+        [
+            "SpatiallyResolvedNeutralKSRelation",
+            None,
+            "SpatiallyResolvedMolecularKSRelation",
+        ],
+        [ax_neut, ax_at, ax_mol],
+    ):
 
-    for ax in [ax_neut, ax_at, ax_mol]:
         sim_lines = []
         sim_labels = []
-        for i, (name, _) in enumerate(zip(name_list, all_galaxies_list)):
-            sim_lines.append(ax.plot([], [], "-", color=f"C{i}")[0])
+        for name in name_list:
+            sim_lines.append(ax.plot([], [], "-")[0])
             sim_labels.append(name)
         for _, Zlabel, linestyle, marker in metallicities:
             sim_lines.append(
                 ax.plot([], [], linestyle=linestyle, marker=marker, color="k")[0]
             )
             sim_labels.append(Zlabel)
+
+        if dataname is not None:
+            observational_data = load_observations(
+                sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
+            )
+            with unyt.matplotlib_support:
+                for obs_data in observational_data:
+                    obs_data.plot_on_axes(ax)
+
         ax.grid(True)
         ax.set_xlim(1.0e-1, 1.0e4)
         ax.set_ylim(1.0e-6, 1.0e1)
@@ -750,8 +767,6 @@ def plot_KS_relations(
     fig_at, ax_at = pl.subplots(1, 1)
     fig_mol, ax_mol = pl.subplots(1, 1)
 
-    sim_lines = []
-    sim_labels = []
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
         for Zmask, _, linestyle, marker in metallicities:
             if Zmask == "all" and always_plot_scatter:
@@ -789,8 +804,8 @@ def plot_KS_relations(
     for ax in [ax_neut, ax_at, ax_mol]:
         sim_lines = []
         sim_labels = []
-        for i, (name, _) in enumerate(zip(name_list, all_galaxies_list)):
-            sim_lines.append(ax.plot([], [], "-", color=f"C{i}")[0])
+        for name in name_list:
+            sim_lines.append(ax.plot([], [], "-")[0])
             sim_labels.append(name)
         for _, Zlabel, linestyle, marker in metallicities:
             sim_lines.append(
@@ -885,25 +900,28 @@ def plot_KS_relations(
                 marker=marker,
             )
 
-    for dataname, ax in [("NeutralGasSurfaceDensityMolecularToAtomicRatio", ax_at)]:
-        observational_data = load_observations(
-            sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
-        )
-        with unyt.matplotlib_support:
-            for obs_data in observational_data:
-                obs_data.plot_on_axes(ax)
-
-    for ax in [ax_neut, ax_at]:
+    for dataname, ax in zip(
+        ["NeutralGasSurfaceDensityMolecularToAtomicRatio", None], [ax_neut, ax_at]
+    ):
         sim_lines = []
         sim_labels = []
-        for i, (name, _) in enumerate(zip(name_list, all_galaxies_list)):
-            sim_lines.append(ax.plot([], [], "-", color=f"C{i}")[0])
+        for name in name_list:
+            sim_lines.append(ax.plot([], [], "-")[0])
             sim_labels.append(name)
         for _, Zlabel, linestyle, marker in metallicities:
             sim_lines.append(
                 ax.plot([], [], linestyle=linestyle, marker=marker, color="k")[0]
             )
             sim_labels.append(Zlabel)
+
+        if dataname is not None:
+            observational_data = load_observations(
+                sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
+            )
+            with unyt.matplotlib_support:
+                for obs_data in observational_data:
+                    obs_data.plot_on_axes(ax)
+
         ax.grid(True)
         ax.tick_params(direction="in", axis="both", which="both", pad=4.5)
         sim_legend = ax.legend(sim_lines, sim_labels, loc="upper left")
