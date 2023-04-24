@@ -1078,19 +1078,19 @@ def plot_morphology(
         ratio_star_filename: {
             "title": "Axis ratios / Stars",
             "caption": (
-                "Axial ratios of galaxies, based on the stars. a, b and c"
+                "Axial ratios of galaxies, based on the stars. a, b, and c"
                 " (a >= b >= c) represent the lengths of the primary axes."
-                " The axis lengths have been computed from the reduced moment"
-                " of inertia tensor using the iterative scheme of Thob et al. (2018)."
+                " The axis lengths have been computed from the reduced (top) and"
+                " normal (bottom) inertia tensors using the iterative scheme of Thob et al. (2018)."
             ),
         },
         ratio_gas_filename: {
             "title": "Axis ratios / HI+H2 gas",
             "caption": (
-                "Axial ratios of galaxies, based on the neutral gas. a, b and c"
+                "Axial ratios of galaxies, based on the neutral gas. a, b, and c"
                 " (a >= b >= c) represent the lengths of the primary axes. The axis"
-                " lengths have been computed from the reduced moment of inertia tensor"
-                " using the iterative scheme of Thob et al. (2018)."
+                " lengths have been computed from the reduced (top) and"
+                " normal (bottom) inertia tensors using the iterative scheme of Thob et al. (2018)."
             ),
         },
     }
