@@ -12,10 +12,9 @@ a mask determining which galaxies are plotted on an individual basis.
 
 import numpy as np
 import unyt
-from functools import reduce
 
 from numpy.typing import NDArray
-from velociraptor.catalogue.catalogue import VelociraptorCatalogue
+from velociraptor.catalogue.catalogue import Catalogue
 
 
 class FilteredCatalogue:
@@ -30,7 +29,7 @@ class FilteredCatalogue:
 
     def __init__(
         self,
-        catalogue: VelociraptorCatalogue,
+        catalogue: Catalogue,
         minimum_mass_stars: unyt.unyt_quantity,
         mass_variable_stars: str,
         minimum_mass_gas: unyt.unyt_quantity,
@@ -74,13 +73,13 @@ class FilteredCatalogue:
         """
 
         # get the masses from the catalogue
-        Mstar = reduce(getattr, mass_variable_stars.split("."), catalogue)
-        Mgas = reduce(getattr, mass_variable_gas.split("."), catalogue)
+        Mstar = catalogue.get_quantity(mass_variable_stars)
+        Mgas = catalogue.get_quantity(mass_variable_gas)
 
         # compute the mask
         mask = (
             (Mstar >= minimum_mass_stars)
-            & (catalogue.structure_type.structuretype == 10)
+            & (catalogue.get_quantity("structure_type.structuretype") == 10)
             & (Mgas > minimum_mass_gas)
         )
         # turn the mask into a list of indices

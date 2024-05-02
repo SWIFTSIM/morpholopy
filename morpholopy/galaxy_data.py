@@ -14,11 +14,12 @@ function process_galaxy() defined at the bottom of this file.
 """
 
 import numpy as np
-from swiftsimio import load as load_snapshot
+import swiftsimio
 from swiftsimio.objects import cosmo_array
 from velociraptor import load as load_catalogue
-from velociraptor.particles import load_groups
-from velociraptor.swift.swift import to_swiftsimio_dataset
+import h5py as h5
+from collections import namedtuple
+
 import unyt
 import yaml
 
@@ -98,9 +99,9 @@ medians = {}
 # for brevity, we append individual plots in logical chunks:
 # - spatially resolved and azimuthally averaged KS plots
 for type, label in [
-    ("neutral", "$\\Sigma{}_{{\\rm{}HI}+{\\rm{}H2}}$"),
-    ("HI", "$\\Sigma{}_{\\rm{}HI}$"),
-    ("H2", "$\\Sigma{}_{\\rm{}H2}$"),
+    ("neutral", r"$\Sigma_{\rm HI+H2}$"),
+    ("HI", r"$\Sigma_{\rm HI}$"),
+    ("H2", r"$\Sigma_{\rm H2}$"),
 ]:
     for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
         medians[f"sigma_{type}_tgas_spatial_{Zmask}"] = {
@@ -113,7 +114,7 @@ for type, label in [
             "x units": "Msun/pc**2",
             "y units": "yr",
             "x label": label,
-            "y label": label + "$/\\Sigma{}_{{\\rm{}SFR}}}$",
+            "y label": label + r"$/ \Sigma_{\rm SFR}$",
         }
         for method in ["spatial", "azimuthal"]:
             medians[f"sigma_{type}_SFR_{method}_{Zmask}"] = {
@@ -126,7 +127,7 @@ for type, label in [
                 "x units": "Msun/pc**2",
                 "y units": "Msun/yr/kpc**2",
                 "x label": label,
-                "y label": "$\\Sigma{}_{{\\rm{}SFR}}}$",
+                "y label": r"$\Sigma_{\rm SFR}$",
             }
 # - Schruba like plots
 for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
@@ -139,8 +140,8 @@ for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
         "range in y": [-8.0, 1.0],
         "x units": "Msun/pc**2",
         "y units": "dimensionless",
-        "x label": "$\\Sigma{}_{{\\rm{}HI}+{\\rm{}H2}}$",
-        "y label": "$\\Sigma{}_{\\rm{}H2}/\\Sigma{}_{{\\rm{}HI}+{\\rm{}H2}}$",
+        "x label": r"$\Sigma_{\rm HI+H2}$",
+        "y label": r"$\Sigma_{\rm H2}/\Sigma_{\rm HI+H2}$",
     }
     medians[f"H2_to_HI_vs_neutral_spatial_{Zmask}"] = {
         "number of bins x": 20,
@@ -151,8 +152,8 @@ for Zmask in ["all", "Zm1", "Z0", "Zp1"]:
         "range in y": [-2.0, 3.0],
         "x units": "Msun/pc**2",
         "y units": "dimensionless",
-        "x label": "$\\Sigma{}_{{\\rm{}HI}+{\\rm{}H2}}$",
-        "y label": "$\\Sigma{}_{\\rm{}H2}/\\Sigma{}_{\\rm{}HI}$",
+        "x label": r"$\Sigma_{\rm HI+H2}$",
+        "y label": r"$\Sigma_{\rm H2}/\Sigma_{\rm HI}$",
     }
 
 # - Sanchez like plots
@@ -165,8 +166,8 @@ medians["H2_to_star_vs_star_spatial"] = {
     "range in y": [-3.0, 1.0],
     "x units": "Msun/pc**2",
     "y units": "dimensionless",
-    "x label": "$\\Sigma{}_{\\bigstar{}}$",
-    "y label": "$\\Sigma{}_{\\rm{}H2}/\\Sigma{}_{\\bigstar{}}$",
+    "x label": r"$\Sigma_{\bigstar}$",
+    "y label": r"$\Sigma_{\rm H2}/\Sigma_{\bigstar}$",
 }
 medians["SFR_to_H2_vs_H2_spatial"] = {
     "number of bins x": 20,
@@ -177,8 +178,8 @@ medians["SFR_to_H2_vs_H2_spatial"] = {
     "range in y": [-11.0, -7.0],
     "x units": "Msun/pc**2",
     "y units": "1/yr",
-    "x label": "$\\Sigma{}_{\\rm{}H2}$",
-    "y label": "$\\Sigma{}_{\\rm{}SFR}/\\Sigma{}_{\\rm{}H2}$",
+    "x label": r"$\Sigma_{\rm H2}$",
+    "y label": r"$\Sigma_{\rm SFR}/\Sigma_{\rm H2}$",
 }
 medians["SFR_to_star_vs_star_spatial"] = {
     "number of bins x": 20,
@@ -189,8 +190,8 @@ medians["SFR_to_star_vs_star_spatial"] = {
     "range in y": [-13.0, -7.0],
     "x units": "Msun/pc**2",
     "y units": "1/yr",
-    "x label": "$\\Sigma{}_{\\bigstar{}}$",
-    "y label": "$\\Sigma{}_{\\rm{}SFR}/\\Sigma{}_{\\bigstar{}}$",
+    "x label": r"$\Sigma{}_{\bigstar}$",
+    "y label": r"$\Sigma{}_{\rm SFR}/\Sigma_{\bigstar}$",
 }
 
 # construct a structured array data type for the median arrays
@@ -413,6 +414,7 @@ def process_galaxy(
         index,
         galaxy_index,
         catalogue_filename,
+        halo_membership_filename,
         snapshot_filename,
         output_path,
         observational_data_path,
@@ -433,18 +435,55 @@ def process_galaxy(
     # (re)load the catalogue to read the properties of this particular galaxy
     # we need to disregard the units to avoid problems with the SFR unit
     catalogue = load_catalogue(catalogue_filename, disregard_units=True)
-    groups = load_groups(
-        catalogue_filename.replace(".properties", ".catalog_groups"),
-        catalogue=catalogue,
-    )
+    membership_data = h5.File(halo_membership_filename, "r")
 
     # get the particles belonging to this galaxy
-    particles, _ = groups.extract_halo(halo_index=galaxy_index)
+    # particles, _ = groups.extract_halo(halo_index=galaxy_index)
     # turn this information into a swiftsimio mask and read the data
     # using swiftsimio
-    data, mask = to_swiftsimio_dataset(
-        particles, snapshot_filename, generate_extra_mask=True
+
+    ##data, mask = to_swiftsimio_dataset(
+    ##    particles, snapshot_filename, generate_extra_mask=True
+    ##)
+
+    swift_mask = swiftsimio.mask(snapshot_filename, spatial_only=True)
+    # SWIFT data is stored in comoving units, so we need to un-correct
+    # the velociraptor data if it is stored in physical.
+    length_factor = catalogue.a
+
+    halo_x = catalogue.get_quantity("positions.xc")[galaxy_index] / length_factor
+    halo_y = catalogue.get_quantity("positions.yc")[galaxy_index] / length_factor
+    halo_z = catalogue.get_quantity("positions.zc")[galaxy_index] / length_factor
+    r_size = (
+        catalogue.get_quantity("searchradius.search_radius")[galaxy_index]
+        / length_factor
     )
+
+    spatial_mask = [
+        [halo_x - r_size, halo_x + r_size],
+        [halo_y - r_size, halo_y + r_size],
+        [halo_z - r_size, halo_z + r_size],
+    ]
+
+    swift_mask.constrain_spatial(spatial_mask)
+    data = swiftsimio.load(snapshot_filename)
+
+    particle_name_masks = {}
+    for particle_name, particle_type in zip(
+        data.metadata.present_particle_names, data.metadata.present_particle_types
+    ):
+        mask_per_type = (
+            membership_data[f"PartType{particle_type}"]["GroupNr_bound"][:]
+            == galaxy_index
+        )
+        particle_name_masks[particle_name] = mask_per_type
+    MaskTuple = namedtuple("MaskCollection", data.metadata.present_particle_names)
+    mask = MaskTuple(**particle_name_masks)
+    membership_data.close()
+
+    for key, val in particle_name_masks.items():
+        print(key, np.sum(val))
+
     # mask out all particles that are actually bound to the galaxy
     # while at it: convert everything to physical coordinates
     for parttype in ["gas", "dark_matter", "stars", "black_holes"]:
@@ -470,9 +509,9 @@ def process_galaxy(
     galaxy_center = cosmo_array(
         unyt.unyt_array(
             [
-                catalogue.positions.xcmbp[galaxy_index],
-                catalogue.positions.ycmbp[galaxy_index],
-                catalogue.positions.zcmbp[galaxy_index],
+                catalogue.get_quantity("positions.xcmbp")[galaxy_index],
+                catalogue.get_quantity("positions.ycmbp")[galaxy_index],
+                catalogue.get_quantity("positions.zcmbp")[galaxy_index],
             ]
         ),
         comoving=False,
@@ -481,9 +520,9 @@ def process_galaxy(
     galaxy_velocity = cosmo_array(
         unyt.unyt_array(
             [
-                catalogue.velocities.vxc[galaxy_index],
-                catalogue.velocities.vyc[galaxy_index],
-                catalogue.velocities.vzc[galaxy_index],
+                catalogue.get_quantity("velocities.vxc")[galaxy_index],
+                catalogue.get_quantity("velocities.vyc")[galaxy_index],
+                catalogue.get_quantity("velocities.vzc")[galaxy_index],
             ]
         ),
         comoving=False,
@@ -492,11 +531,13 @@ def process_galaxy(
 
     # store some of the catalogue properties directly into the galaxy data array
     galaxy_data["stellar_mass"] = cosmo_array(
-        catalogue.apertures.mass_star_50_kpc[galaxy_index].to("Msun"),
+        catalogue.get_quantity("apertures.mass_star_50_kpc")[galaxy_index].to("Msun"),
         comoving=False,
         cosmo_factor=data.gas.masses.cosmo_factor,
     )
-    r_halfmass_star = catalogue.radii.r_halfmass_star[galaxy_index]
+    r_halfmass_star = catalogue.get_quantity("apertures.rhalfmass_star_50_kpc")[
+        galaxy_index
+    ]
     galaxy_data["half_mass_radius_star"] = cosmo_array(
         r_halfmass_star.to("kpc"),
         comoving=False,
@@ -510,8 +551,12 @@ def process_galaxy(
 
     # Lowest sSFR below which the galaxy is considered passive
     marginal_ssfr = unyt.unyt_quantity(1e-11, units=1 / unyt.year)
-    stellar_mass = catalogue.apertures.mass_star_50_kpc[galaxy_index].to("Msun")
-    star_formation_rate = catalogue.apertures.sfr_gas_50_kpc[galaxy_index]
+    stellar_mass = catalogue.get_quantity("apertures.mass_star_50_kpc")[
+        galaxy_index
+    ].to("Msun")
+    star_formation_rate = catalogue.get_quantity("apertures.sfr_gas_50_kpc")[
+        galaxy_index
+    ]
 
     if stellar_mass == unyt.unyt_quantity(0.0, units=unyt.msun):
         ssfr = unyt.unyt_quantity(0.0, units=1 / unyt.year)
@@ -530,17 +575,12 @@ def process_galaxy(
     # get other radius quantities from the catalogue that the orientation
     # calculation might use
     Rhalf = cosmo_array(
-        catalogue.apertures.rhalfmass_star_50_kpc[galaxy_index],
+        catalogue.get_quantity("apertures.rhalfmass_star_50_kpc")[galaxy_index],
         comoving=False,
         cosmo_factor=data.gas.coordinates.cosmo_factor,
     )
     R200crit = cosmo_array(
-        catalogue.spherical_overdensities.r_200_rhocrit[galaxy_index],
-        comoving=False,
-        cosmo_factor=data.gas.coordinates.cosmo_factor,
-    )
-    Rvir = cosmo_array(
-        catalogue.radii.rvir[galaxy_index],
+        catalogue.get_quantity("spherical_overdensities.r_200_rhocrit")[galaxy_index],
         comoving=False,
         cosmo_factor=data.gas.coordinates.cosmo_factor,
     )
@@ -600,7 +640,7 @@ def process_galaxy(
     # determine the angular momentum vector and corresponding face-on and
     # edge-on rotation matrices
     orientation_vector, face_on_rmatrix, edge_on_rmatrix = get_orientation_matrices(
-        data, Rhalf, R200crit, Rvir, orientation_type
+        data, Rhalf, R200crit, orientation_type
     )
 
     # done with the pre-processing:
@@ -608,6 +648,7 @@ def process_galaxy(
 
     # - axis ratios and angular momenta
     (a, b, c), z_axis = get_axis_lengths_reduced_tensor(galaxy_log, data.stars, Rhalf)
+    print(a, b, c, z_axis)
     if (a > 0.0) and (b > 0.0) and (c > 0.0):
         galaxy_data["stars_axis_ca_reduced"] = c / a
         galaxy_data["stars_axis_cb_reduced"] = c / b
@@ -632,7 +673,7 @@ def process_galaxy(
         galaxy_data["stars_z_axis_normal"][:] = np.nan
 
     stars_momentum, kappa_corot = get_kappa_corot(
-        data.stars, Rhalf, R200crit, Rvir, orientation_type, orientation_vector
+        data.stars, Rhalf, R200crit, orientation_type, orientation_vector
     )
     galaxy_data["stars_kappa_co"] = kappa_corot
     galaxy_data["orientation_vector"] = orientation_vector
@@ -670,7 +711,6 @@ def process_galaxy(
         data.gas,
         Rhalf,
         R200crit,
-        Rvir,
         orientation_type,
         orientation_vector,
         mass_variable="H_neutral_mass",

@@ -9,7 +9,6 @@ Morphology related plots: axis lengths and angular momenta.
 import numpy as np
 import unyt
 import swiftsimio as sw
-from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
 from swiftsimio import SWIFTDataset
 
 from .orientation import get_orientation_mask
@@ -22,7 +21,6 @@ import matplotlib.pyplot as pl
 from typing import Dict, List, Tuple, Union
 from numpy.typing import NDArray
 from .logging import GalaxyLog
-from .medians import plot_median_on_axis_as_line
 
 from scipy.optimize import curve_fit
 from scipy import stats
@@ -175,8 +173,6 @@ def calculate_scaleheight_from_map(mass_map, img_size):
     z = (np.tile(xx, (len(xx), 1))).T
     z_1D = np.ravel(z)
     S_1D = np.ravel(mass_map)
-
-    p0 = (mass_map.max(), 1.0, 0.0)
 
     try:
         popt, pcov = curve_fit(
@@ -358,7 +354,9 @@ def get_axis_lengths_tensor(
         galaxy_log.debug("Total weight of 0, so not calculating axis lengths.")
         return unyt.unyt_array(np.zeros(3), position.units), np.zeros(3)
 
-    Itensor = (weight[:, None, None] / weight.sum()) * np.ones((weight.shape[0], 3, 3))
+    Itensor = (
+        (weight[:, None, None] / weight.sum()) * np.ones((weight.shape[0], 3, 3))
+    ).value
     # Note: unyt currently ignores the position units in the *=
     # i.e. Itensor is dimensionless throughout (even though it should not be)
     for i in range(3):
@@ -441,9 +439,9 @@ def get_axis_lengths_tensor(
             )
             break
 
-        Itensor = (weight[:, None, None] / weight.sum()) * np.ones(
-            (weight.shape[0], 3, 3)
-        )
+        Itensor = (
+            (weight[:, None, None] / weight.sum()) * np.ones((weight.shape[0], 3, 3))
+        ).value
         # Note: unyt currently ignores the position units in the *=
         # i.e. Itensor is dimensionless throughout (even though it should not be)
         for i in range(3):
@@ -512,7 +510,6 @@ def get_kappa_corot(
     partdata: "SWIFTParticleDataset",
     half_mass_radius: unyt.unyt_quantity,
     R200crit: unyt.unyt_quantity,
-    Rvir: unyt.unyt_quantity,
     orientation_type: str,
     orientation_vector: NDArray[float],
     mass_variable: str = "masses",
@@ -536,7 +533,7 @@ def get_kappa_corot(
 
     radius = np.sqrt((position ** 2).sum(axis=1))
     mask = get_orientation_mask(
-        radius, half_mass_radius, R200crit, Rvir, inner_aperture, outer_aperture
+        radius, half_mass_radius, R200crit, inner_aperture, outer_aperture
     )
 
     position = position[mask]
@@ -544,14 +541,15 @@ def get_kappa_corot(
     mass = mass[mask]
     radius = radius[mask]
 
+    print(f"{position=}")
+    print(f"{velocity=}")
+
     K = 0.5 * (mass[:, None] * velocity ** 2).sum()
     if K == 0.0:
         return 0.0, 0.0
 
     # np.cross does not preserve units, so we need to multiply them back in
-    angular_momentum = (
-        (mass[:, None] * np.cross(position, velocity)) * position.units * velocity.units
-    )
+    angular_momentum = mass[:, None] * np.cross(position, velocity)
     Lz = (angular_momentum * orientation_vector[None, :]).sum(axis=1)
     rdotL = (position * orientation_vector[None, :]).sum(axis=1)
     R2 = radius ** 2 - rdotL ** 2

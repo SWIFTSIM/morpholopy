@@ -11,7 +11,7 @@ based on a strategy encoded in a string with the following format:
 where:
  - component type can be stars, gas, ISM, HI, baryons
  - inner mask radius can be 0xR0.5, 0.5R0.5
- - outer mask radius can be R0.5, 2xR0.5, 4xR0.5, 50kpc, R200crit, 0.1Rvir
+ - outer mask radius can be R0.5, 2xR0.5, 4xR0.5, 50kpc, R200crit, 0.1R200crit
  - sigma clipping can be 0sigma (no clipping), 1sigma, 2sigma
 
 This file contains a number of functions that can be called in other
@@ -36,7 +36,6 @@ def get_orientation_mask(
     radius: unyt.unyt_array,
     half_mass_radius: unyt.unyt_quantity,
     R200crit: unyt.unyt_quantity,
-    Rvir: unyt.unyt_quantity,
     inner_aperture: str,
     outer_aperture: str,
 ) -> NDArray[bool]:
@@ -67,8 +66,8 @@ def get_orientation_mask(
         )
     elif outer_aperture == "R200crit":
         mask &= radius < R200crit
-    elif outer_aperture == "0.1Rvir":
-        mask &= radius < 0.1 * Rvir
+    elif outer_aperture == "0.1R200crit":
+        mask &= radius < 0.1 * R200crit
     else:
         raise RuntimeError(f"Unknown outer aperture: {outer_aperture}!")
 
@@ -145,7 +144,6 @@ def get_mass_position_velocity(
     data: SWIFTDataset,
     half_mass_radius: unyt.unyt_quantity,
     R200crit: unyt.unyt_quantity,
-    Rvir: unyt.unyt_quantity,
     orientation_type: str,
 ) -> Tuple[unyt.unyt_array, unyt.unyt_array, unyt.unyt_array]:
     """
@@ -161,7 +159,7 @@ def get_mass_position_velocity(
 
     radius = np.sqrt((position ** 2).sum(axis=1))
     mask = get_orientation_mask(
-        radius, half_mass_radius, R200crit, Rvir, inner_aperture, outer_aperture
+        radius, half_mass_radius, R200crit, inner_aperture, outer_aperture
     )
 
     position = position[mask]
@@ -196,7 +194,6 @@ def get_orientation_matrices(
     data: SWIFTDataset,
     half_mass_radius: unyt.unyt_quantity,
     R200crit: unyt.unyt_quantity,
-    Rvir: unyt.unyt_quantity,
     orientation_type: str,
 ) -> Tuple[NDArray[float], NDArray[float], NDArray[float]]:
     """
@@ -210,7 +207,7 @@ def get_orientation_matrices(
     """
 
     mass, position, velocity = get_mass_position_velocity(
-        data, half_mass_radius, R200crit, Rvir, orientation_type
+        data, half_mass_radius, R200crit, orientation_type
     )
 
     angular_momentum = (mass[:, None] * np.cross(position, velocity)).sum(axis=0)
