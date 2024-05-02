@@ -437,15 +437,6 @@ def process_galaxy(
     catalogue = load_catalogue(catalogue_filename, disregard_units=True)
     membership_data = h5.File(halo_membership_filename, "r")
 
-    # get the particles belonging to this galaxy
-    # particles, _ = groups.extract_halo(halo_index=galaxy_index)
-    # turn this information into a swiftsimio mask and read the data
-    # using swiftsimio
-
-    ##data, mask = to_swiftsimio_dataset(
-    ##    particles, snapshot_filename, generate_extra_mask=True
-    ##)
-
     swift_mask = swiftsimio.mask(snapshot_filename, spatial_only=True)
     # SWIFT data is stored in comoving units, so we need to un-correct
     # the velociraptor data if it is stored in physical.
