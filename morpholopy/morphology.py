@@ -541,24 +541,31 @@ def get_kappa_corot(
     mass = mass[mask]
     radius = radius[mask]
 
-    print(f"{position=}")
-    print(f"{velocity=}")
-
     K = 0.5 * (mass[:, None] * velocity ** 2).sum()
     if K == 0.0:
         return 0.0, 0.0
 
-    # np.cross does not preserve units, so we need to multiply them back in
-    angular_momentum = mass[:, None] * np.cross(position, velocity)
+    # np.cross may not preserve units, so we need to multiply them back in
+    try:
+        angular_momentum = mass[:, None] * np.cross(position, velocity)
+        j = angular_momentum.sum(axis=0) / mass.sum()
+        j.convert_to_units("kpc*km/s")
+    except unyt.exceptions.UnitConversionError:
+        angular_momentum = (
+            mass[:, None]
+            * np.cross(position, velocity)
+            * position.units
+            * velocity.units
+        )
+        j = angular_momentum.sum(axis=0) / mass.sum()
+        j.convert_to_units("kpc*km/s")
+    j = np.sqrt((j ** 2).sum())
+
     Lz = (angular_momentum * orientation_vector[None, :]).sum(axis=1)
     rdotL = (position * orientation_vector[None, :]).sum(axis=1)
     R2 = radius ** 2 - rdotL ** 2
     mask = (Lz > 0.0) & (R2 > 0.0)
     Kcorot = 0.5 * (Lz[mask] ** 2 / (mass[mask] * R2[mask])).sum()
-
-    j = angular_momentum.sum(axis=0) / mass.sum()
-    j.convert_to_units("kpc*km/s")
-    j = np.sqrt((j ** 2).sum())
 
     return j, Kcorot / K
 

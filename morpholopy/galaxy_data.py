@@ -481,9 +481,6 @@ def process_galaxy(
     mask = MaskTuple(**particle_name_masks)
     membership_data.close()
 
-    for key, val in particle_name_masks.items():
-        print(key, np.sum(val))
-
     # mask out all particles that are actually bound to the galaxy
     # while at it: convert everything to physical coordinates
     for parttype in ["gas", "dark_matter", "stars", "black_holes"]:
@@ -648,7 +645,6 @@ def process_galaxy(
 
     # - axis ratios and angular momenta
     (a, b, c), z_axis = get_axis_lengths_reduced_tensor(galaxy_log, data.stars, Rhalf)
-    print(a, b, c, z_axis)
     if (a > 0.0) and (b > 0.0) and (c > 0.0):
         galaxy_data["stars_axis_ca_reduced"] = c / a
         galaxy_data["stars_axis_cb_reduced"] = c / b
