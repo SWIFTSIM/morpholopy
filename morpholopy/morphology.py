@@ -357,8 +357,6 @@ def get_axis_lengths_tensor(
     Itensor = (
         (weight[:, None, None] / weight.sum()) * np.ones((weight.shape[0], 3, 3))
     ).value
-    # Note: unyt currently ignores the position units in the *=
-    # i.e. Itensor is dimensionless throughout (even though it should not be)
     for i in range(3):
         for j in range(3):
             Itensor[:, i, j] *= position[:, i] * position[:, j]
@@ -545,20 +543,10 @@ def get_kappa_corot(
     if K == 0.0:
         return 0.0, 0.0
 
-    # np.cross may not preserve units, so we need to multiply them back in
-    try:
-        angular_momentum = mass[:, None] * np.cross(position, velocity)
-        j = angular_momentum.sum(axis=0) / mass.sum()
-        j.convert_to_units("kpc*km/s")
-    except unyt.exceptions.UnitConversionError:
-        angular_momentum = (
-            mass[:, None]
-            * np.cross(position, velocity)
-            * position.units
-            * velocity.units
-        )
-        j = angular_momentum.sum(axis=0) / mass.sum()
-        j.convert_to_units("kpc*km/s")
+    angular_momentum = mass[:, None] * np.cross(position, velocity)
+    j = angular_momentum.sum(axis=0) / mass.sum()
+    j.convert_to_units("kpc*km/s")
+
     j = np.sqrt((j ** 2).sum())
 
     Lz = (angular_momentum * orientation_vector[None, :]).sum(axis=1)
