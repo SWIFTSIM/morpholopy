@@ -12,16 +12,13 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as pl
-from matplotlib import gridspec
 import unyt
-from swiftsimio.visualisation.rotation import rotation_matrix_from_vector
 from swiftsimio.visualisation.projection import project_gas
 from swiftsimio.visualisation.projection import project_pixel_grid
 from swiftsimio.visualisation.slice import kernel_gamma
 from swiftsimio.visualisation.smoothing_length_generation import (
     generate_smoothing_lengths,
 )
-from swiftsimio import swift_cosmology_to_astropy
 from astropy.visualization import make_lupton_rgb
 
 from scipy.optimize import curve_fit
@@ -87,7 +84,6 @@ def calculate_scaleheight_pointmasses(zcoords, weights, zrange, resolution):
     )
 
     z_1D = (bin_edges[1:] + bin_edges[:-1]) / 2.0
-    p0 = (hist.max(), 1.0, 0.0)
 
     try:
         popt, pcov = curve_fit(
@@ -106,8 +102,6 @@ def calculate_scaleheight_fit(mass_map, r_img_kpc, r_abs_max_kpc):
     z = (np.tile(xx, (len(xx), 1))).T
     z_1D = np.ravel(z[:, (np.abs(xx) < r_abs_max_kpc)])
     S_1D = np.ravel(mass_map[:, (np.abs(xx) < r_abs_max_kpc)])
-
-    p0 = (mass_map.max(), 1.0, 0.0)
 
     try:
         popt, pcov = curve_fit(
@@ -512,42 +506,60 @@ def plot_galaxy(
     image_info += " resolution: (%i x %i) pixel." % (npix, npix)
 
     galaxy_coords_text = (
-        f"[ {catalogue.positions.xcmbp[halo_id].to('Mpc').value:.02f}, "
-        + f"{catalogue.positions.ycmbp[halo_id].to('Mpc').value:.02f}, "
-        + f"{catalogue.positions.zcmbp[halo_id].to('Mpc').value:.02f} ] cMpc"
+        f"[ {catalogue.get_quantity('positions.xcmbp')[halo_id].to('Mpc').value:.02f}, "
+        + f"{catalogue.get_quantity('positions.ycmbp')[halo_id].to('Mpc').value:.02f}, "
+        + f"{catalogue.get_quantity('positions.zcmbp')[halo_id].to('Mpc').value:.02f} ] cMpc"
     )
 
     galaxy_info_title = f"Galaxy {halo_id:08d} " + galaxy_coords_text
 
     galaxy_info_short = (
         r"M$_{\mathrm{200,crit}}$ = "
-        + sci_notation(catalogue.masses.mass_200crit[halo_id].to("Msun").value)
+        + sci_notation(
+            catalogue.get_quantity("masses.mass_200crit")[halo_id].to("Msun").value
+        )
         + r" M$_{\odot}$, "
         + r"M$_{\mathrm{*,30kpc}}$ = "
-        + sci_notation(catalogue.masses.mass_star_30kpc[halo_id].to("Msun").value)
+        + sci_notation(
+            catalogue.get_quantity("apertures.mass_star_30_kpc")[halo_id]
+            .to("Msun")
+            .value
+        )
         + r" M$_{\odot}$, "
     )
 
     galaxy_info = " Coordinates (x,y,z) = " + galaxy_coords_text + ", "
     galaxy_info += (
         r"M$_{\mathrm{200,crit}}$ = "
-        + sci_notation(catalogue.masses.mass_200crit[halo_id].to("Msun").value)
+        + sci_notation(
+            catalogue.get_quantity("masses.mass_200crit")[halo_id].to("Msun").value
+        )
         + r" M$_{\odot}$, "
     )
     galaxy_info += (
         r"M$_{\mathrm{*,30kpc}}$ = "
-        + sci_notation(catalogue.masses.mass_star_30kpc[halo_id].to("Msun").value)
+        + sci_notation(
+            catalogue.get_quantity("apertures.mass_star_30_kpc")[halo_id]
+            .to("Msun")
+            .value
+        )
         + r" M$_{\odot}$, "
     )
     galaxy_info += (
         r"M$_{\mathrm{gas,30kpc}}$ = "
-        + sci_notation(catalogue.masses.mass_gas_30kpc[halo_id].to("Msun").value)
+        + sci_notation(
+            catalogue.get_quantity("apertures.mass_gas_30_kpc")[halo_id]
+            .to("Msun")
+            .value
+        )
         + r" M$_{\odot}$, "
     )
     galaxy_info += (
         r"M$_{\mathrm{HI,30kpc}}$ = "
         + sci_notation(
-            catalogue.gas_hydrogen_species_masses.HI_mass_30_kpc[halo_id]
+            catalogue.get_quantity("gas_hydrogen_species_masses.HI_mass_30_kpc")[
+                halo_id
+            ]
             .to("Msun")
             .value
         )
@@ -556,15 +568,17 @@ def plot_galaxy(
     galaxy_info += (
         r"M$_{\mathrm{H2,30kpc}}$ = "
         + sci_notation(
-            catalogue.gas_hydrogen_species_masses.H2_mass_30_kpc[halo_id]
+            catalogue.get_quantity("gas_hydrogen_species_masses.H2_mass_30_kpc")[
+                halo_id
+            ]
             .to("Msun")
             .value
         )
         + r" M$_{\odot}$, "
     )
     sSFR = (
-        catalogue.apertures.sfr_gas_100_kpc[halo_id]
-        / catalogue.apertures.mass_star_100_kpc[halo_id]
+        catalogue.get_quantity("apertures.sfr_gas_100_kpc")[halo_id]
+        / catalogue.get_quantity("apertures.mass_star_100_kpc")[halo_id]
     )
     if np.isfinite(sSFR):
         galaxy_info += (
@@ -573,12 +587,13 @@ def plot_galaxy(
             + r" Gyr$^{-1}$"
         )
 
-    stars_faceon_filename = "galaxy_%3.3i_map_stars_faceon.png" % (index)
-    stars_edgeon_filename = "galaxy_%3.3i_map_stars_edgeon.png" % (index)
-    HI_faceon_filename = "galaxy_%3.3i_map_HI_faceon.png" % (index)
-    HI_edgeon_filename = "galaxy_%3.3i_map_HI_edgeon.png" % (index)
-    H2_faceon_filename = "galaxy_%3.3i_map_H2_faceon.png" % (index)
-    H2_edgeon_filename = "galaxy_%3.3i_map_H2_edgeon.png" % (index)
+    base_file_name = f"galaxy_{index:03d}_map"
+    stars_faceon_filename = f"{base_file_name}_stars_faceon.png"
+    stars_edgeon_filename = f"{base_file_name}_stars_edgeon.png"
+    HI_faceon_filename = f"{base_file_name}_HI_faceon.png"
+    HI_edgeon_filename = f"{base_file_name}_HI_edgeon.png"
+    H2_faceon_filename = f"{base_file_name}_H2_faceon.png"
+    H2_edgeon_filename = f"{base_file_name}_H2_edgeon.png"
 
     plots = {}
 

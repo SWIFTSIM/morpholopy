@@ -12,6 +12,7 @@ Usage:
     -C/--config      <configuration directory> \
     -i/--input       <input folder that contains the snapshots and catalogues> \
     -s/--snapshots   <input snapshot> \
+    -g/--groups      <input particle membership> \
     -c/--catalogues  <input catalogue> \
     -o/--output      <directory where output images and web pages are stored> \
    [-n/--run-names   <name for the run>] \
@@ -41,6 +42,7 @@ parser = ap.ArgumentParser(
         "    -C/--config      <configuration directory> \ \n"
         "    -i/--input       <input folder that contains the snapshots and catalogues> \ \n"
         "    -s/--snapshots   <input snapshot> \ \n"
+        "    -g/--groups      <input particle membership> \ \n"
         "    -c/--catalogues  <input catalogue> \ \n"
         "    -o/--output      <directory where output images and web pages are stored> \ \n"
         "   [-n/--run-names   <name for the run>] \ \n"
@@ -66,7 +68,16 @@ parser.add_argument(
     "--catalogues",
     type=str,
     required=True,
-    help="Name of the VELOCIraptor HDF5 .properties file(s). Required.",
+    help="Name of the SOAP HDF5 properties file(s). Required.",
+    nargs="*",
+)
+
+parser.add_argument(
+    "-g",
+    "--groups",
+    type=str,
+    required=True,
+    help="Name of the SOAP HDF5 memberships file(s). Required.",
     nargs="*",
 )
 
@@ -302,6 +313,7 @@ if __name__ == "__main__":
             # compute the galaxy properties
             # start by getting the catalogue and snapshot file name
             halo_catalogue_filename = f"{args.input[0]}/{args.catalogues[0]}"
+            halo_membership_filename = f"{args.input[0]}/{args.groups[0]}"
             snapshot_filename = f"{args.input[0]}/{args.snapshots[0]}"
 
             # load the catalogue and create the filtered catalogue that only
@@ -329,8 +341,9 @@ if __name__ == "__main__":
             # these should correspond to the argument needed by
             # process_galaxy():
             #  - the index in the global galaxy list
-            #  - the catalogue index of the galaxy (its VR/SOAP index)
+            #  - the catalogue index of the galaxy (its SOAP index)
             #  - the catalogue file name
+            #  - the halo membership file name
             #  - the snapshot file name
             #  - the output directory name
             #  - the observational data path
@@ -342,6 +355,7 @@ if __name__ == "__main__":
                     index,
                     galaxy_index,
                     halo_catalogue_filename,
+                    halo_membership_filename,
                     snapshot_filename,
                     args.output,
                     observational_data_path,

@@ -362,12 +362,12 @@ def plot_KS_relations(
        Data for all the simulations that need to be plotted (can be a single galaxy for
        individual galaxy plots).
      - prefix: str
-       Unique prefix that is prepended to images file names. Useful to distinguish
+       Unique prefix that is prepended to image file names. Useful to distinguish
        individual galaxy images.
      - always_plot_scatter: bool
-       Wheter or not to always plot individual median histrogram bins as well as median lines.
+       Whether to always plot individual median histogram bins as well as median lines.
      - plot_integrated_quantities: bool
-       Whether or not to plot integrated KS plots. Set to False for individual galaxy plots,
+       Whether to plot integrated KS plots. Set to False for individual galaxy plots,
        since a galaxy is only a single point on those plots.
 
     Returns an image data dictionary compatible with MorphologyConfig.add_images().
@@ -444,7 +444,6 @@ def plot_KS_relations(
                     ax.plot([], [], marker=marker, color="k", linestyle="None")[0]
                 )
                 sim_labels.append(name)
-
             if dataname is not None:
                 observational_data = load_observations(
                     sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
@@ -578,14 +577,32 @@ def plot_KS_relations(
         ax.add_artist(sim_legend)
 
     neut_filename = f"{prefix}azimuthal_KS_neutral.png"
+    ax_neut.set_xlabel(
+        r"Neutral Surface Density $\Sigma_{\rm HI+H2}$ $\rm \left[\frac{M_\odot}{pc^{2}}\right]$"
+    )
+    ax_neut.set_ylabel(
+        r"Star Formation Rate Surface Density $\rm \left[\frac{M_\odot}{yr \cdot kpc^{2}}\right]$"
+    )
     fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
     pl.close(fig_neut)
 
     at_filename = f"{prefix}azimuthal_KS_atomic.png"
+    ax_at.set_xlabel(
+        r"Atomic Surface Density $\Sigma_{\rm HI}$ $\rm \left[\frac{M_\odot}{pc^{2}}\right]$"
+    )
+    ax_at.set_ylabel(
+        r"Star Formation Rate Surface Density $\rm \left[\frac{M_\odot}{yr \cdot kpc^{2}}\right]$"
+    )
     fig_at.savefig(f"{output_path}/{at_filename}", dpi=300)
     pl.close(fig_at)
 
     mol_filename = f"{prefix}azimuthal_KS_molecular.png"
+    ax_mol.set_xlabel(
+        r"Molecular Surface Density $\Sigma_{\rm H2}$ $\rm \left[\frac{M_\odot}{pc^{2}}\right]$"
+    )
+    ax_mol.set_ylabel(
+        r"Star Formation Rate Surface Density $\rm \left[\frac{M_\odot}{yr \cdot kpc^{2}}\right]$"
+    )
     fig_mol.savefig(f"{output_path}/{mol_filename}", dpi=300)
     pl.close(fig_mol)
 
@@ -706,14 +723,32 @@ def plot_KS_relations(
         ax.add_artist(sim_legend)
 
     neut_filename = f"{prefix}spatial_KS_neutral.png"
+    ax_neut.set_xlabel(
+        r"Neutral Surface Density $\Sigma_{\rm HI+H2}$ $\rm \left[\frac{M_\odot}{pc^{2}}\right]$"
+    )
+    ax_neut.set_ylabel(
+        r"Star Formation Rate Surface Density $\rm \left[\frac{M_\odot}{yr \cdot kpc^{2}}\right]$"
+    )
     fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
     pl.close(fig_neut)
 
     at_filename = f"{prefix}spatial_KS_atomic.png"
+    ax_at.set_xlabel(
+        r"Atomic Surface Density $\Sigma_{\rm HI}$ $\rm \left[\frac{M_\odot}{pc^{2}}\right]$"
+    )
+    ax_at.set_ylabel(
+        r"Star Formation Rate Surface Density $\rm \left[\frac{M_\odot}{yr \cdot kpc^{2}}\right]$"
+    )
     fig_at.savefig(f"{output_path}/{at_filename}", dpi=300)
     pl.close(fig_at)
 
     mol_filename = f"{prefix}spatial_KS_molecular.png"
+    ax_mol.set_xlabel(
+        r"Molecular Surface Density $\Sigma_{\rm H2}$ $\rm \left[\frac{M_\odot}{pc^{2}}\right]$"
+    )
+    ax_mol.set_ylabel(
+        r"Star Formation Rate Surface Density $\rm \left[\frac{M_\odot}{yr \cdot kpc^{2}}\right]$"
+    )
     fig_mol.savefig(f"{output_path}/{mol_filename}", dpi=300)
     pl.close(fig_mol)
 
@@ -821,14 +856,32 @@ def plot_KS_relations(
         ax.add_artist(sim_legend)
 
     neut_filename = f"{prefix}spatial_tgas_neutral.png"
+    ax_neut.set_xlabel(
+        r"Neutral Surface Density $\Sigma_{\rm HI+H2}$ $\rm \left[\frac{M_\odot}{pc^{2}}\right]$"
+    )
+    ax_neut.set_ylabel(
+        r"Neutral gas depletion time $\Sigma_{\rm HI+H2} / \Sigma_{\rm SFR}$ [yr]"
+    )
     fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
     pl.close(fig_neut)
 
     at_filename = f"{prefix}spatial_tgas_atomic.png"
+    ax_at.set_xlabel(
+        r"Atomic Surface Density $\Sigma_{\rm HI}$ $\rm \left[\frac{M_\odot}{pc^{2}}\right]$"
+    )
+    ax_at.set_ylabel(
+        r"Atomic gas depletion time $\Sigma_{\rm HI} / \Sigma_{\rm SFR}$ [yr]"
+    )
     fig_at.savefig(f"{output_path}/{at_filename}", dpi=300)
     pl.close(fig_at)
 
     mol_filename = f"{prefix}spatial_tgas_molecular.png"
+    ax_mol.set_xlabel(
+        r"Molecular Surface Density $\Sigma_{\rm H2}$ $\rm \left[\frac{M_\odot}{pc^{2}}\right]$"
+    )
+    ax_mol.set_ylabel(
+        r"Molecular gas depletion time $\Sigma_{\rm H2} / \Sigma_{\rm SFR}$ [yr]"
+    )
     fig_mol.savefig(f"{output_path}/{mol_filename}", dpi=300)
     pl.close(fig_mol)
 
