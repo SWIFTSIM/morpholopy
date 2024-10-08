@@ -38,17 +38,17 @@ parser = ap.ArgumentParser(
     ),
     epilog=(
         "Example usage:\n"
-        "  ./morphology-pipeline \ \n"
-        "    -C/--config      <configuration directory> \ \n"
-        "    -i/--input       <input folder that contains the snapshots and catalogues> \ \n"
-        "    -s/--snapshots   <input snapshot> \ \n"
-        "    -g/--groups      <input particle membership> \ \n"
-        "    -c/--catalogues  <input catalogue> \ \n"
-        "    -o/--output      <directory where output images and web pages are stored> \ \n"
-        "   [-n/--run-names   <name for the run>] \ \n"
-        "   [-j/--num-of-cpus <number of parallel processes to use>] \ \n"
-        "   [-m/--metadata    <prefix for the meta-data output file] \ \n"
-        "   [-d/--debug] \ \n"
+        "  ./morphology-pipeline \\ \n"
+        "    -C/--config      <configuration directory> \\ \n"
+        "    -i/--input       <input folder that contains the snapshots and catalogues> \\ \n"
+        "    -s/--snapshots   <input snapshot> \\ \n"
+        "    -g/--groups      <input particle membership> \\ \n"
+        "    -c/--catalogues  <input catalogue> \\ \n"
+        "    -o/--output      <directory where output images and web pages are stored> \\ \n"
+        "   [-n/--run-names   <name for the run>] \\ \n"
+        "   [-j/--num-of-cpus <number of parallel processes to use>] \\ \n"
+        "   [-m/--metadata    <prefix for the meta-data output file] \\ \n"
+        "   [-d/--debug] \\ \n"
         "   [-l/--lazy]"
     ),
     # we need this to preserve the line breaks in the epilog
@@ -376,7 +376,7 @@ if __name__ == "__main__":
 
             # make sure galaxies with plots are processed first, since they take
             # longer than average
-            arglist = sorted(arglist, key=lambda x: x[7], reverse=True)
+            arglist = sorted(arglist, key=lambda x: x[11], reverse=True)
 
             # determine the appropriate number of parallel processes to use:
             #  - the number requested by the user

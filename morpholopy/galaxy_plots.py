@@ -16,7 +16,7 @@ import unyt
 from swiftsimio.visualisation.projection import project_gas
 from swiftsimio.visualisation.projection import project_pixel_grid
 from swiftsimio.visualisation.slice import kernel_gamma
-from swiftsimio.visualisation.smoothing_length_generation import (
+from swiftsimio.visualisation.smoothing_length.generate import (
     generate_smoothing_lengths,
 )
 from astropy.visualization import make_lupton_rgb

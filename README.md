@@ -36,6 +36,7 @@ Usage:
   -C/--config      <configuration directory> \
   -i/--input       <input folder that contains the snapshots and catalogues> \
   -s/--snapshots   <input snapshot> \
+  -g/--groups      <input particle membership> \
   -c/--catalogues  <input catalogue> \
   -o/--output      <directory where output images and web pages are stored> \
  [-n/--run-names   <name for the run>] \
