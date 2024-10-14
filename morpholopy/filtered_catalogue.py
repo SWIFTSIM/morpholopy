@@ -42,9 +42,8 @@ class FilteredCatalogue:
         """
         Constructor.
 
-        Reads the catalogue and only keeps galaxies with
-        structure type 10 (centrals) that have a stellar and gas
-        mass within the provided limits.
+        Reads the catalogue and only keeps central galaxies with
+        a stellar and gas mass within the provided limits.
 
         Parameters:
          - catalogue: VelociraptorCatalogue
@@ -79,7 +78,7 @@ class FilteredCatalogue:
         # compute the mask
         mask = (
             (Mstar >= minimum_mass_stars)
-            & (catalogue.get_quantity("structure_type.structuretype") == 10)
+            & (catalogue.get_quantity("structure_type.structuretype") == 1)
             & (Mgas > minimum_mass_gas)
         )
         # turn the mask into a list of indices

@@ -435,7 +435,6 @@ def process_galaxy(
     # (re)load the catalogue to read the properties of this particular galaxy
     # we need to disregard the units to avoid problems with the SFR unit
     catalogue = load_catalogue(catalogue_filename, disregard_units=True)
-    membership_data = h5.File(halo_membership_filename, "r")
 
     swift_mask = swiftsimio.mask(snapshot_filename, spatial_only=True)
     # SWIFT data is stored in comoving units, so we need to un-correct
@@ -450,27 +449,33 @@ def process_galaxy(
         / length_factor
     )
 
-    spatial_mask = [
+    load_region = [
         [halo_x - r_size, halo_x + r_size],
         [halo_y - r_size, halo_y + r_size],
         [halo_z - r_size, halo_z + r_size],
     ]
+    swift_mask.constrain_spatial(load_region)
 
-    swift_mask.constrain_spatial(spatial_mask)
-    data = swiftsimio.load(snapshot_filename)
+    membership_data = swiftsimio.load(halo_membership_filename, mask=swift_mask)
+    data = swiftsimio.load(snapshot_filename, mask=swift_mask)
+
+    # The value group_nr_bound in the membership files corresponds to the index
+    # of the object in the original subhalo catalogue. In general this is not
+    # equal to the index of the object in the final SOAP catalogue.
+    halo_catalogue_index = catalogue.get_quantity("inputhalos.halocatalogueindex")[
+        galaxy_index
+    ]
 
     particle_name_masks = {}
-    for particle_name, particle_type in zip(
-        data.metadata.present_particle_names, data.metadata.present_particle_types
-    ):
+    for particle_name in ["gas", "dark_matter", "stars", "black_holes"]:
         mask_per_type = (
-            membership_data[f"PartType{particle_type}"]["GroupNr_bound"][:]
-            == galaxy_index
+            getattr(getattr(membership_data, particle_name), "group_nr_bound").value
+            == halo_catalogue_index
         )
         particle_name_masks[particle_name] = mask_per_type
-    MaskTuple = namedtuple("MaskCollection", data.metadata.present_particle_names)
+    MaskTuple = namedtuple("MaskCollection", data.metadata.present_group_names)
     mask = MaskTuple(**particle_name_masks)
-    membership_data.close()
+    del membership_data
 
     # mask out all particles that are actually bound to the galaxy
     # while at it: convert everything to physical coordinates
