@@ -35,8 +35,8 @@ Usage:
 ./morphology-pipeline \
   -C/--config      <configuration directory> \
   -i/--input       <input folder that contains the snapshots and catalogues> \
-  -s/--snapshots   <input snapshot> \
-  -g/--groups      <input particle membership> \
+  -s/--snapshots   <input swift snapshot containing particle properties> \
+  -g/--groups      <input swift snapshot containing particle membership> \
   -c/--catalogues  <input catalogue> \
   -o/--output      <directory where output images and web pages are stored> \
  [-n/--run-names   <name for the run>] \
@@ -45,7 +45,9 @@ Usage:
  [-d/--debug] \
  [-l/--lazy]
 ```
-(the last four arguments are optional). `--debug` outputs additional debugging information, while
+(the last four arguments are optional). If you have a virtual snapshot which also contains
+membership information than `-s` and `-g` can be pointed at the same file.
+`--debug` outputs additional debugging information, while
 `--lazy` simply reads an existing meta-data file and creates the plots and web pages, without
 recomputing any quantities. This is the same behaviour as the comparison mode, but for a single run.
 
