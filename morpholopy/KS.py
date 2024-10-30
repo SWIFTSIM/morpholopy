@@ -926,25 +926,43 @@ def plot_KS_relations(
         }
     )
 
-    fig_neut, ax_neut = pl.subplots(1, 1)
+    neut_obs_datasets = {
+        "Galaxies": (
+            "NeutralGasSurfaceDensityMolecularToAtomicRatio/Schruba2011_detection",
+            "NeutralGasSurfaceDensityMolecularToAtomicRatio/Schruba2011_upper_limit",
+        ),
+        "MCs": (
+            "NeutralGasSurfaceDensityMolecularToAtomicRatio/Tumlinson2002_LMC",
+            "NeutralGasSurfaceDensityMolecularToAtomicRatio/Tumlinson2002_SMC",
+        ),
+        "MW": (
+            "NeutralGasSurfaceDensityMolecularToAtomicRatio/Gillmon2006",
+            "NeutralGasSurfaceDensityMolecularToAtomicRatio/Shull2021",
+            "NeutralGasSurfaceDensityMolecularToAtomicRatio/Wolfire2008",
+        ),
+    }
+    fig_neuts, ax_neuts = zip(*[pl.subplots(1, 1) for _ in neut_obs_datasets])
     fig_at, ax_at = pl.subplots(1, 1)
 
     for i, (name, data) in enumerate(zip(name_list, all_galaxies_list)):
         for Zmask, _, linestyle, marker in metallicities:
             if Zmask == "all" and len(name_list) == 1:
-                plot_median_on_axis_as_pdf(
-                    ax_neut, data.medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"]
-                )
+                for ax_neut in ax_neuts:
+                    plot_median_on_axis_as_pdf(
+                        ax_neut,
+                        data.medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"],
+                    )
                 plot_median_on_axis_as_pdf(
                     ax_at, data.medians[f"H2_to_HI_vs_neutral_spatial_{Zmask}"]
                 )
-            plot_median_on_axis_as_line(
-                ax_neut,
-                data.medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"],
-                color=f"C{i}",
-                linestyle=linestyle,
-                marker=marker,
-            )
+            for ax_neut in ax_neuts:
+                plot_median_on_axis_as_line(
+                    ax_neut,
+                    data.medians[f"H2_to_neutral_vs_neutral_spatial_{Zmask}"],
+                    color=f"C{i}",
+                    linestyle=linestyle,
+                    marker=marker,
+                )
             plot_median_on_axis_as_line(
                 ax_at,
                 data.medians[f"H2_to_HI_vs_neutral_spatial_{Zmask}"],
@@ -953,9 +971,7 @@ def plot_KS_relations(
                 marker=marker,
             )
 
-    for dataname, ax in zip(
-        ["NeutralGasSurfaceDensityMolecularToAtomicRatio", None], [ax_neut, ax_at]
-    ):
+    for datasets, ax in zip([*neut_obs_datasets.values(), None], [*ax_neuts, ax_at]):
         sim_lines = []
         sim_labels = []
         for name in name_list:
@@ -967,9 +983,11 @@ def plot_KS_relations(
             )
             sim_labels.append(Zlabel)
 
-        if dataname is not None:
+        if datasets is not None:
             observational_data = load_observations(
-                sorted(glob.glob(f"{observational_data_path}/{dataname}/*.hdf5"))
+                sorted(
+                    f"{observational_data_path}/{dataset}.hdf5" for dataset in datasets
+                )
             )
             with unyt.matplotlib_support:
                 for obs_data in observational_data:
@@ -981,34 +999,39 @@ def plot_KS_relations(
         ax.legend(loc="lower right")
         ax.add_artist(sim_legend)
 
-    ax_neut.set_xlim(1.0e-1, 1.0e4)
-    ax_neut.set_ylim(1.0e-8, 1.0)
+    for ax_neut in ax_neuts:
+        ax_neut.set_xlim(1.0e-1, 1.0e4)
+        ax_neut.set_ylim(1.0e-8, 1.0)
     ax_at.set_xlim(1.0e-1, 1.0e4)
     ax_at.set_ylim(1.0e-2, 1.0e3)
 
-    neut_filename = f"{prefix}H2_to_neutral_vs_neutral_spatial.png"
-    fig_neut.savefig(f"{output_path}/{neut_filename}", dpi=300)
-    pl.close(fig_neut)
+    for i, dataset in enumerate(neut_obs_datasets):
+        neut_filename = f"{prefix}{dataset}_H2_to_neutral_vs_neutral_spatial.png"
+        fig_neuts[i].savefig(f"{output_path}/{neut_filename}", dpi=300)
+        pl.close(fig_neuts[i])
+        plots["Combined surface densities"].update(
+            {
+                neut_filename: {
+                    "title": "H2 to Neutral as a function of Neutral Surface Density (spatially averaged)",
+                    "caption": (
+                        "Ratio of the molecular and neutral surface density as a"
+                        " function of the neutral surface density"
+                        " for individual galaxies."
+                        " The surface densities were"
+                        " calculated using a grid with pixel size of 750 pc."
+                        " Full lines show the median relation for all cells, while"
+                        " different line styles only include cells with a fixed"
+                        " metallicity (as indicated in the legend)."
+                    ),
+                }
+            }
+        )
 
     at_filename = f"{prefix}H2_to_HI_vs_neutral_spatial.png"
     fig_at.savefig(f"{output_path}/{at_filename}", dpi=300)
     pl.close(fig_at)
-
     plots["Combined surface densities"].update(
         {
-            neut_filename: {
-                "title": "H2 to Neutral as a function of Neutral Surface Density (spatially averaged)",
-                "caption": (
-                    "Ratio of the molecular and neutral surface density as a"
-                    " function of the neutral surface density"
-                    " for individual galaxies."
-                    " The surface densities were"
-                    " calculated using a grid with pixel size of 750 pc."
-                    " Full lines show the median relation for all cells, while"
-                    " different line styles only include cells with a fixed"
-                    " metallicity (as indicated in the legend)."
-                ),
-            },
             at_filename: {
                 "title": "H2 to HI as a function of Neutral Surface Density (spatially averaged)",
                 "caption": (
@@ -1021,7 +1044,7 @@ def plot_KS_relations(
                     " different line styles only include cells with a fixed"
                     " metallicity (as indicated in the legend)."
                 ),
-            },
+            }
         }
     )
 
